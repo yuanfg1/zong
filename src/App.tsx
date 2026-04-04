@@ -403,9 +403,12 @@ function App() {
     
     // 计算新的位置，确保节点之间有足够的间距
     const totalNodes = siblingNodeIds.length;
-    // 根据子节点数量动态调整节点宽度，避免交叉
+    // 根据子节点数量动态调整节点间距，避免拥挤
     const baseNodeWidth = 80;
-    const nodeWidth = totalNodes > 3 ? baseNodeWidth + (totalNodes - 3) * 20 : baseNodeWidth;
+    const baseSpacing = 40;
+    // 随着节点数量增加，线性增加间距
+    const nodeSpacing = baseSpacing + (totalNodes - 1) * 10;
+    const nodeWidth = baseNodeWidth + nodeSpacing;
     const startX = parentNode.position.x - ((totalNodes - 1) * nodeWidth) / 2;
 
     // 调整所有同级节点的位置
