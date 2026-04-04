@@ -405,14 +405,12 @@ function App() {
     const totalNodes = siblingNodeIds.length;
     // 基础节点宽度
     const nodeWidth = 60;
-    // 基础间距
-    const baseSpacing = 40;
-    // 随着节点数量增加，线性增加间距
-    const spacing = baseSpacing + (totalNodes - 1) * 30;
-    // 计算每个节点的总宽度（节点宽度 + 间距）
-    const totalWidthPerNode = nodeWidth + spacing;
+    // 固定间距
+    const fixedSpacing = 40;
+    // 计算总宽度
+    const totalWidth = (nodeWidth * totalNodes) + (fixedSpacing * (totalNodes - 1));
     // 计算起始位置，使节点居中分布
-    const startX = parentNode.position.x - ((totalNodes - 1) * totalWidthPerNode) / 2;
+    const startX = parentNode.position.x - (totalWidth - nodeWidth) / 2;
 
     // 调整所有同级节点的位置
     let adjustedNodes = updatedNodes.map(node => {
@@ -422,7 +420,7 @@ function App() {
           ...node,
           position: {
             ...node.position,
-            x: startX + (index * totalWidthPerNode),
+            x: startX + (index * (nodeWidth + fixedSpacing)),
             y: parentNode.position.y + 250
           }
         };
