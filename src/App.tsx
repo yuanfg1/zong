@@ -12,6 +12,7 @@ interface User {
   id: string;
   username: string;
   password: string;
+  isAdmin?: boolean;
 }
 
 interface MarkerData {
@@ -239,6 +240,7 @@ function App() {
   // 思维导图状态
   const [showMindMap, setShowMindMap] = useState<boolean>(false);
   const [showMarkMap, setShowMarkMap] = useState<boolean>(false);
+  const [showAdminPanel, setShowAdminPanel] = useState<boolean>(false);
   const [nodes, setNodes] = useState<MindMapNode[]>(loadMindMapData().nodes);
   const [edges, setEdges] = useState<MindMapEdge[]>(loadMindMapData().edges);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
@@ -632,16 +634,25 @@ function App() {
       alert('用户名已存在');
       return;
     }
+    
+    // 第一个注册的用户自动成为管理员
+    const isFirstUser = users.length === 0;
+    
     const newUser: User = {
       id: Date.now().toString(),
       username,
       password,
+      isAdmin: isFirstUser, // 第一个用户是管理员
     };
     users.push(newUser);
     localStorage.setItem('users', JSON.stringify(users));
     setCurrentUser(newUser);
     setIsAuthenticated(true);
     localStorage.setItem('currentUser', JSON.stringify(newUser));
+    
+    if (isFirstUser) {
+      alert('注册成功！您是第一个用户，已自动成为管理员。');
+    }
   };
 
   // 处理登出
@@ -713,9 +724,39 @@ function App() {
   const handleDeleteMarker = (markerId: string) => {
     if (!currentUser) return;
     
-    // 只允许删除自己的标记
-    markers = markers.filter(m => !(m.id === markerId && m.userId === currentUser.id));
+    // 管理员可以删除任何标记，普通用户只能删除自己的标记
+    const marker = markers.find(m => m.id === markerId);
+    if (!marker) return;
+    
+    if (currentUser.isAdmin || marker.userId === currentUser.id) {
+      markers = markers.filter(m => m.id !== markerId);
+      localStorage.setItem('markers', JSON.stringify(markers));
+    } else {
+      alert('您没有权限删除此标记');
+    }
+  };
+
+  // 管理员删除用户（同时删除该用户的所有标记）
+  const handleDeleteUser = (userId: string) => {
+    if (!currentUser?.isAdmin) {
+      alert('只有管理员可以删除用户');
+      return;
+    }
+    
+    if (userId === currentUser.id) {
+      alert('不能删除自己');
+      return;
+    }
+    
+    // 删除用户
+    users = users.filter(u => u.id !== userId);
+    localStorage.setItem('users', JSON.stringify(users));
+    
+    // 删除该用户的所有标记
+    markers = markers.filter(m => m.userId !== userId);
     localStorage.setItem('markers', JSON.stringify(markers));
+    
+    alert('用户及其标记已删除');
   };
 
   // 获取当前位置的组件
@@ -808,26 +849,34 @@ function App() {
     <div className="map-container">
       {/* 用户信息 */}
       <div className="user-info">
-        <span>欢迎, {currentUser?.username}</span>
+        <span>欢迎, {currentUser?.username} {currentUser?.isAdmin && '(管理员)'}</span>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button 
-            style={{ padding: '5px 10px', backgroundColor: (!showMindMap && !showMarkMap) ? '#007bff' : '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-            onClick={() => { setShowMindMap(false); setShowMarkMap(false); }}
+            style={{ padding: '5px 10px', backgroundColor: (!showMindMap && !showMarkMap && !showAdminPanel) ? '#007bff' : '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+            onClick={() => { setShowMindMap(false); setShowMarkMap(false); setShowAdminPanel(false); }}
           >
             地图
           </button>
           <button 
             style={{ padding: '5px 10px', backgroundColor: showMindMap ? '#007bff' : '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-            onClick={() => { setShowMindMap(true); setShowMarkMap(false); }}
+            onClick={() => { setShowMindMap(true); setShowMarkMap(false); setShowAdminPanel(false); }}
           >
             思维导图
           </button>
           <button 
             style={{ padding: '5px 10px', backgroundColor: showMarkMap ? '#007bff' : '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-            onClick={() => { setShowMindMap(false); setShowMarkMap(true); }}
+            onClick={() => { setShowMindMap(false); setShowMarkMap(true); setShowAdminPanel(false); }}
           >
             MarkMap
           </button>
+          {currentUser?.isAdmin && (
+            <button 
+              style={{ padding: '5px 10px', backgroundColor: showAdminPanel ? '#dc3545' : '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+              onClick={() => { setShowMindMap(false); setShowMarkMap(false); setShowAdminPanel(true); }}
+            >
+              管理面板
+            </button>
+          )}
           <button className="logout-btn" onClick={handleLogout}>退出</button>
         </div>
       </div>
@@ -852,30 +901,41 @@ function App() {
                 <Popup>
                   <h3>{marker.title}</h3>
                   <p>{marker.description}</p>
-                  {currentUser && marker.userId === currentUser.id && (
+                  <p style={{ fontSize: '12px', color: '#666' }}>
+                    创建者: {users.find(u => u.id === marker.userId)?.username || '未知'}
+                  </p>
+                  {currentUser && (marker.userId === currentUser.id || currentUser.isAdmin) && (
                     <div style={{ marginTop: '10px', display: 'flex', gap: '5px' }}>
+                      {marker.userId === currentUser.id && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setNewMarker({
+                              position: marker.position,
+                              title: marker.title,
+                              description: marker.description,
+                            });
+                            setShowMarkerForm(true);
+                          }}
+                          style={{ padding: '5px 10px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                        >
+                          编辑
+                        </button>
+                      )}
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          setNewMarker({
-                            position: marker.position,
-                            title: marker.title,
-                            description: marker.description,
-                          });
-                          setShowMarkerForm(true);
-                        }}
-                        style={{ padding: '5px 10px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                      >
-                        编辑
-                      </button>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteMarker(marker.id);
+                          if (currentUser.isAdmin && marker.userId !== currentUser.id) {
+                            if (confirm('确定要删除此标记吗？')) {
+                              handleDeleteMarker(marker.id);
+                            }
+                          } else {
+                            handleDeleteMarker(marker.id);
+                          }
                         }}
                         style={{ padding: '5px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                       >
-                        删除
+                        {currentUser.isAdmin && marker.userId !== currentUser.id ? '管理员删除' : '删除'}
                       </button>
                     </div>
                   )}
@@ -992,6 +1052,111 @@ function App() {
                 ### 子分支 3.2
               </pre>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 管理员面板 */}
+      {showAdminPanel && currentUser?.isAdmin && (
+        <div style={{ width: '100%', height: '100%', padding: '20px', overflow: 'auto' }}>
+          <h2>管理员面板</h2>
+          
+          {/* 用户管理 */}
+          <div style={{ marginBottom: '30px' }}>
+            <h3>用户管理</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8f9fa' }}>
+                  <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'left' }}>用户名</th>
+                  <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'left' }}>用户ID</th>
+                  <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'left' }}>角色</th>
+                  <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'left' }}>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(user => (
+                  <tr key={user.id}>
+                    <td style={{ padding: '10px', border: '1px solid #dee2e6' }}>{user.username}</td>
+                    <td style={{ padding: '10px', border: '1px solid #dee2e6' }}>{user.id}</td>
+                    <td style={{ padding: '10px', border: '1px solid #dee2e6' }}>
+                      {user.isAdmin ? '管理员' : '普通用户'}
+                    </td>
+                    <td style={{ padding: '10px', border: '1px solid #dee2e6' }}>
+                      {user.id !== currentUser.id && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`确定要删除用户 "${user.username}" 吗？这将同时删除该用户的所有标记。`)) {
+                              handleDeleteUser(user.id);
+                            }
+                          }}
+                          style={{ 
+                            padding: '5px 10px', 
+                            backgroundColor: '#dc3545', 
+                            color: 'white', 
+                            border: 'none', 
+                            borderRadius: '4px', 
+                            cursor: 'pointer' 
+                          }}
+                        >
+                          删除用户
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 标记管理 */}
+          <div>
+            <h3>标记管理</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f8f9fa' }}>
+                  <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'left' }}>标题</th>
+                  <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'left' }}>描述</th>
+                  <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'left' }}>所属用户</th>
+                  <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'left' }}>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {markers.map(marker => {
+                  const markerUser = users.find(u => u.id === marker.userId);
+                  return (
+                    <tr key={marker.id}>
+                      <td style={{ padding: '10px', border: '1px solid #dee2e6' }}>{marker.title}</td>
+                      <td style={{ padding: '10px', border: '1px solid #dee2e6' }}>{marker.description}</td>
+                      <td style={{ padding: '10px', border: '1px solid #dee2e6' }}>
+                        {markerUser ? markerUser.username : '未知用户'}
+                      </td>
+                      <td style={{ padding: '10px', border: '1px solid #dee2e6' }}>
+                        <button
+                          onClick={() => {
+                            if (confirm(`确定要删除标记 "${marker.title}" 吗？`)) {
+                              handleDeleteMarker(marker.id);
+                            }
+                          }}
+                          style={{ 
+                            padding: '5px 10px', 
+                            backgroundColor: '#dc3545', 
+                            color: 'white', 
+                            border: 'none', 
+                            borderRadius: '4px', 
+                            cursor: 'pointer' 
+                          }}
+                        >
+                          删除标记
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {markers.length === 0 && (
+              <p style={{ marginTop: '10px', color: '#6c757d' }}>暂无标记</p>
+            )}
           </div>
         </div>
       )}
