@@ -6,21 +6,24 @@ import ReactFlow, { Controls, Background, MiniMap, addEdge, removeElements, upda
 import 'reactflow/dist/style.css';
 // 导入markmap-autoloader
 import 'markmap-autoloader';
+// 导入数据库
+import { db, initDatabase, User, MarkerData } from './db';
 
 // 类型定义
-interface User {
+interface MindMapNode {
   id: string;
-  username: string;
-  password: string;
-  isAdmin?: boolean;
+  type: string;
+  position: { x: number; y: number };
+  data: { label: string };
 }
 
-interface MarkerData {
+interface MindMapEdge {
   id: string;
-  position: [number, number];
-  title: string;
-  description: string;
-  userId: string;
+  source: string;
+  target: string;
+  animated: boolean;
+  style: { stroke: string };
+  label?: string;
 }
 
 interface MindMapNode {
@@ -151,9 +154,9 @@ const VerticalNode = ({ data, isConnectable, id, onNodesChange }: any) => {
   );
 };
 
-// 模拟数据库
-let users: User[] = JSON.parse(localStorage.getItem('users') || '[]');
-let markers: MarkerData[] = JSON.parse(localStorage.getItem('markers') || '[]');
+// 数据状态
+let users: User[] = [];
+let markers: MarkerData[] = [];
 
 // 加载思维导图数据
 const loadMindMapData = (): { nodes: MindMapNode[]; edges: MindMapEdge[] } => {
@@ -236,6 +239,7 @@ function App() {
     title: '',
     description: '',
   });
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   
   // 思维导图状态
   const [showMindMap, setShowMindMap] = useState<boolean>(false);
@@ -247,15 +251,40 @@ function App() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const markmapRef = useRef<HTMLDivElement>(null);
 
-  // 检查用户登录状态
+  // 初始化数据库和加载数据
   useEffect(() => {
-    const savedUser = localStorage.getItem('currentUser');
-    if (savedUser) {
-      const user = JSON.parse(savedUser);
-      setCurrentUser(user);
-      setIsAuthenticated(true);
-    }
+    const init = async () => {
+      try {
+        await initDatabase();
+        await loadData();
+        
+        // 检查用户登录状态
+        const savedUser = localStorage.getItem('currentUser');
+        if (savedUser) {
+          const user = JSON.parse(savedUser);
+          // 验证用户是否仍然存在
+          const dbUser = await db.getUserById(user.id);
+          if (dbUser) {
+            setCurrentUser(dbUser);
+            setIsAuthenticated(true);
+          } else {
+            localStorage.removeItem('currentUser');
+          }
+        }
+      } catch (error) {
+        console.error('初始化失败:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    init();
   }, []);
+
+  // 加载数据
+  const loadData = async () => {
+    users = await db.getAllUsers();
+    markers = await db.getAllMarkers();
+  };
 
   // 保存思维导图数据到本地存储
   useEffect(() => {
@@ -615,10 +644,10 @@ function App() {
   };
 
   // 处理登录
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = users.find(u => u.username === username && u.password === password);
-    if (user) {
+    const user = await db.getUserByUsername(username);
+    if (user && user.password === password) {
       setCurrentUser(user);
       setIsAuthenticated(true);
       localStorage.setItem('currentUser', JSON.stringify(user));
@@ -628,15 +657,17 @@ function App() {
   };
 
   // 处理注册
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (users.find(u => u.username === username)) {
+    const existingUser = await db.getUserByUsername(username);
+    if (existingUser) {
       alert('用户名已存在');
       return;
     }
     
     // 第一个注册的用户自动成为管理员
-    const isFirstUser = users.length === 0;
+    const allUsers = await db.getAllUsers();
+    const isFirstUser = allUsers.length === 0;
     
     const newUser: User = {
       id: Date.now().toString(),
@@ -644,8 +675,9 @@ function App() {
       password,
       isAdmin: isFirstUser, // 第一个用户是管理员
     };
-    users.push(newUser);
-    localStorage.setItem('users', JSON.stringify(users));
+    
+    await db.addUser(newUser);
+    users = await db.getAllUsers();
     setCurrentUser(newUser);
     setIsAuthenticated(true);
     localStorage.setItem('currentUser', JSON.stringify(newUser));
@@ -685,20 +717,23 @@ function App() {
   };
 
   // 保存标记
-  const handleSaveMarker = () => {
+  const handleSaveMarker = async () => {
     if (!currentUser) return;
     
     // 检查用户是否已有标记
-    const existingMarkerIndex = markers.findIndex(m => m.userId === currentUser.id);
+    const userMarkers = await db.getMarkersByUserId(currentUser.id);
+    const existingMarker = userMarkers[0];
     
-    if (existingMarkerIndex >= 0) {
+    if (existingMarker) {
       // 更新现有标记
-      markers[existingMarkerIndex] = {
-        ...markers[existingMarkerIndex],
+      const updatedMarker = {
+        ...existingMarker,
         position: newMarker.position,
         title: newMarker.title,
         description: newMarker.description,
+        updatedAt: Date.now(),
       };
+      await db.updateMarker(updatedMarker);
     } else {
       // 创建新标记
       const marker: MarkerData = {
@@ -707,11 +742,14 @@ function App() {
         title: newMarker.title,
         description: newMarker.description,
         userId: currentUser.id,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       };
-      markers.push(marker);
+      await db.addMarker(marker);
     }
     
-    localStorage.setItem('markers', JSON.stringify(markers));
+    // 重新加载标记数据
+    markers = await db.getAllMarkers();
     setShowMarkerForm(false);
     setNewMarker({
       position: [39.9042, 116.4074],
@@ -721,23 +759,23 @@ function App() {
   };
 
   // 删除标记
-  const handleDeleteMarker = (markerId: string) => {
+  const handleDeleteMarker = async (markerId: string) => {
     if (!currentUser) return;
     
     // 管理员可以删除任何标记，普通用户只能删除自己的标记
-    const marker = markers.find(m => m.id === markerId);
+    const marker = await db.getMarkerById(markerId);
     if (!marker) return;
     
     if (currentUser.isAdmin || marker.userId === currentUser.id) {
-      markers = markers.filter(m => m.id !== markerId);
-      localStorage.setItem('markers', JSON.stringify(markers));
+      await db.deleteMarker(markerId);
+      markers = await db.getAllMarkers();
     } else {
       alert('您没有权限删除此标记');
     }
   };
 
   // 管理员删除用户（同时删除该用户的所有标记）
-  const handleDeleteUser = (userId: string) => {
+  const handleDeleteUser = async (userId: string) => {
     if (!currentUser?.isAdmin) {
       alert('只有管理员可以删除用户');
       return;
@@ -748,13 +786,15 @@ function App() {
       return;
     }
     
-    // 删除用户
-    users = users.filter(u => u.id !== userId);
-    localStorage.setItem('users', JSON.stringify(users));
-    
     // 删除该用户的所有标记
-    markers = markers.filter(m => m.userId !== userId);
-    localStorage.setItem('markers', JSON.stringify(markers));
+    await db.deleteMarkersByUserId(userId);
+    
+    // 删除用户
+    await db.deleteUser(userId);
+    
+    // 重新加载数据
+    users = await db.getAllUsers();
+    markers = await db.getAllMarkers();
     
     alert('用户及其标记已删除');
   };
@@ -798,6 +838,25 @@ function App() {
     });
     return null;
   };
+
+  // 显示加载状态
+  if (isLoading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        flexDirection: 'column',
+        gap: '20px'
+      }}>
+        <div>正在加载数据库...</div>
+        <div style={{ fontSize: '14px', color: '#666' }}>
+          首次使用时会自动迁移本地数据到IndexedDB
+        </div>
+      </div>
+    );
+  }
 
   // 渲染登录/注册表单
   if (!isAuthenticated) {
@@ -1059,7 +1118,25 @@ function App() {
       {/* 管理员面板 */}
       {showAdminPanel && currentUser?.isAdmin && (
         <div style={{ width: '100%', height: '100%', padding: '20px', overflow: 'auto' }}>
-          <h2>管理员面板</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2>管理员面板</h2>
+            <button
+              onClick={async () => {
+                await loadData();
+                alert('数据已刷新');
+              }}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              刷新数据
+            </button>
+          </div>
           
           {/* 用户管理 */}
           <div style={{ marginBottom: '30px' }}>
