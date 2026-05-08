@@ -83,7 +83,7 @@ function toggleEditMode() {
 <template>
   <div class="app">
     <header class="header">
-      <h1>🏠 家谱代序图</h1>
+      <h1>家谱代序图</h1>
       <p class="subtitle">共 {{ totalGenerations }} 代家族成员</p>
       <button 
         class="edit-toggle-btn" 
@@ -131,7 +131,7 @@ function toggleEditMode() {
 <style scoped>
 .app {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: white;
   padding: 24px;
 }
 
@@ -142,13 +142,12 @@ function toggleEditMode() {
 
 .header h1 {
   font-size: 2.5rem;
-  color: white;
+  color: #333;
   margin: 0;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
 }
 
 .subtitle {
-  color: rgba(255, 255, 255, 0.8);
+  color: #666;
   font-size: 1.1rem;
   margin-top: 8px;
 }
@@ -161,18 +160,19 @@ function toggleEditMode() {
   border-radius: 30px;
   cursor: pointer;
   transition: all 0.3s;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: #f0f0f0;
+  color: #333;
+  border: 2px solid #ddd;
 }
 
 .edit-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: #e0e0e0;
 }
 
 .edit-toggle-btn.active {
   background: #4CAF50;
   border-color: #4CAF50;
+  color: white;
 }
 
 .main-content {
@@ -181,10 +181,10 @@ function toggleEditMode() {
 }
 
 .tree-container {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 16px;
+  background: white;
+  border: 2px solid #333;
+  border-radius: 8px;
   padding: 32px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   max-width: 1200px;
   width: 100%;
 }
@@ -192,13 +192,13 @@ function toggleEditMode() {
 .footer {
   text-align: center;
   margin-top: 24px;
-  color: rgba(255, 255, 255, 0.7);
+  color: #666;
   font-size: 14px;
 }
 
 .edit-tip {
   margin-top: 8px;
-  color: rgba(255, 255, 255, 0.9);
+  color: #333;
   font-weight: 500;
 }
 </style>

@@ -98,69 +98,94 @@ function handleEditMember() {
 .generation-label {
   font-size: 16px;
   font-weight: 600;
-  color: #667eea;
+  color: #333;
   margin-bottom: 12px;
   padding: 4px 12px;
-  background: rgba(102, 126, 234, 0.1);
-  border-radius: 20px;
+  border: 1px solid #333;
+  border-radius: 4px;
 }
 
 .couple-container {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .spouse-connector {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 8px;
+  padding: 0 4px;
 }
 
 .marriage-line {
   font-size: 16px;
-  color: #9B59B6;
+  color: #333;
 }
 
 .children-section {
-  margin-top: 24px;
+  margin-top: 16px;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .children-connector {
-  height: 24px;
+  height: 20px;
   width: 2px;
-  background: linear-gradient(to bottom, #667eea, #764ba2);
-  margin: 0 auto;
+  background: #333;
 }
 
 .children-container {
   display: flex;
   justify-content: center;
-  gap: 24px;
+  gap: 40px;
   flex-wrap: wrap;
   margin-top: 16px;
+  position: relative;
+}
+
+.children-container::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 40px);
+  height: 2px;
+  background: #333;
 }
 
 .child-wrapper {
   position: relative;
 }
 
+.child-wrapper::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 20px;
+  background: #333;
+}
+
 .expand-btn {
   margin-top: 12px;
   padding: 4px 12px;
   font-size: 12px;
-  color: #667eea;
+  color: #333;
   background: transparent;
-  border: 1px solid #667eea;
+  border: 1px solid #333;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .expand-btn:hover {
-  background: #667eea;
+  background: #333;
   color: white;
 }
 </style>

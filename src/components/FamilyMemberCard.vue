@@ -61,59 +61,46 @@ function handleEdit() {
 <style scoped>
 .family-card {
   background: white;
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 12px;
-  min-width: 120px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s, box-shadow 0.2s;
+  min-width: 100px;
+  border: 2px solid #333;
+  transition: transform 0.2s;
 }
 
 .family-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.family-card.gender-male {
-  border-left: 4px solid #4A90D9;
-}
-
-.family-card.gender-female {
-  border-left: 4px solid #E91E8C;
-}
-
-.family-card.spouse-card {
-  border-left: 4px solid #9B59B6;
 }
 
 .card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .avatar {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   color: #333;
 }
 
 .card-body {
-  padding-top: 8px;
-  border-top: 1px solid #eee;
+  padding-top: 6px;
+  border-top: 1px solid #ccc;
 }
 
 .info {
-  font-size: 12px;
+  font-size: 11px;
   color: #666;
 }
 
@@ -121,8 +108,8 @@ function handleEdit() {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 14px;
-  padding: 4px;
+  font-size: 12px;
+  padding: 3px;
   opacity: 0;
   transition: opacity 0.2s;
 }
