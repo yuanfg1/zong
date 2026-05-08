@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import FamilyTree from './components/FamilyTree.vue'
 import FamilyMemberEditor from './components/FamilyMemberEditor.vue'
 import AddChildModal from './components/AddChildModal.vue'
+import DraggableTree from './components/DraggableTree.vue'
 import { familyTreeData, countGenerations } from './data/familyTree.js'
 
 const familyTree = ref(JSON.parse(JSON.stringify(familyTreeData)))
@@ -96,11 +97,13 @@ function toggleEditMode() {
     
     <main class="main-content">
       <div class="tree-container">
-        <FamilyTree 
-          :tree="familyTree" 
-          :editable="isEditable"
-          @editMember="handleEditMember"
-        />
+        <DraggableTree>
+          <FamilyTree 
+            :tree="familyTree" 
+            :editable="isEditable"
+            @editMember="handleEditMember"
+          />
+        </DraggableTree>
       </div>
     </main>
     
@@ -185,6 +188,8 @@ function toggleEditMode() {
   padding: 32px;
   max-width: 1200px;
   width: 100%;
+  overflow: auto;
+  min-height: 400px;
 }
 
 .footer {
