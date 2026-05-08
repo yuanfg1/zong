@@ -16,13 +16,6 @@ defineProps({
 
 const emit = defineEmits(['edit'])
 
-function getAge(birthYear, deathYear) {
-  if (deathYear) {
-    return `${birthYear} - ${deathYear} (${deathYear - birthYear}岁)`
-  }
-  return `生于 ${birthYear}`
-}
-
 function handleEdit() {
   emit('edit')
 }
@@ -49,11 +42,6 @@ function handleEdit() {
       >
         ✏️
       </button>
-    </div>
-    <div class="card-body">
-      <div class="info">
-        {{ getAge(member.birthYear, member.deathYear) }}
-      </div>
     </div>
   </div>
 </template>
@@ -92,16 +80,6 @@ function handleEdit() {
   font-weight: 600;
   font-size: 13px;
   color: #333;
-}
-
-.card-body {
-  padding-top: 6px;
-  border-top: 1px solid #ccc;
-}
-
-.info {
-  font-size: 11px;
-  color: #666;
 }
 
 .edit-btn {

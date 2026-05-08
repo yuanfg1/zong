@@ -182,8 +182,6 @@ function toggleEditMode() {
 
 .tree-container {
   background: white;
-  border: 2px solid #333;
-  border-radius: 8px;
   padding: 32px;
   max-width: 1200px;
   width: 100%;
