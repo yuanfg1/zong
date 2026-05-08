@@ -7,14 +7,24 @@ defineProps({
   isSpouse: {
     type: Boolean,
     default: false
+  },
+  editable: {
+    type: Boolean,
+    default: false
   }
 })
+
+const emit = defineEmits(['edit'])
 
 function getAge(birthYear, deathYear) {
   if (deathYear) {
     return `${birthYear} - ${deathYear} (${deathYear - birthYear}岁)`
   }
   return `生于 ${birthYear}`
+}
+
+function handleEdit() {
+  emit('edit')
 }
 </script>
 
@@ -31,6 +41,14 @@ function getAge(birthYear, deathYear) {
       <div class="name">
         {{ member.name }}
       </div>
+      <button 
+        v-if="editable && !isSpouse" 
+        class="edit-btn" 
+        @click="handleEdit"
+        title="编辑"
+      >
+        ✏️
+      </button>
     </div>
     <div class="card-body">
       <div class="info">
@@ -97,5 +115,23 @@ function getAge(birthYear, deathYear) {
 .info {
   font-size: 12px;
   color: #666;
+}
+
+.edit-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.family-card:hover .edit-btn {
+  opacity: 1;
+}
+
+.edit-btn:hover {
+  transform: scale(1.2);
 }
 </style>

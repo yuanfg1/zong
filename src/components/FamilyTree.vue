@@ -10,8 +10,14 @@ const props = defineProps({
   generation: {
     type: Number,
     default: 1
+  },
+  editable: {
+    type: Boolean,
+    default: false
   }
 })
+
+const emit = defineEmits(['editMember'])
 
 const expanded = ref(true)
 
@@ -22,6 +28,10 @@ const hasChildren = computed(() => {
 function toggleExpand() {
   expanded.value = !expanded.value
 }
+
+function handleEditMember() {
+  emit('editMember', props.tree)
+}
 </script>
 
 <template>
@@ -31,7 +41,11 @@ function toggleExpand() {
     </div>
     
     <div class="couple-container">
-      <FamilyMemberCard :member="tree" />
+      <FamilyMemberCard 
+        :member="tree" 
+        :editable="editable"
+        @edit="handleEditMember"
+      />
       
       <div v-if="tree.spouse" class="spouse-connector">
         <span class="marriage-line">⚭</span>
@@ -53,7 +67,12 @@ function toggleExpand() {
           :key="child.id" 
           class="child-wrapper"
         >
-          <FamilyTree :tree="child" :generation="generation + 1" />
+          <FamilyTree 
+            :tree="child" 
+            :generation="generation + 1"
+            :editable="editable"
+            @editMember="emit('editMember', $event)"
+          />
         </div>
       </div>
     </div>
