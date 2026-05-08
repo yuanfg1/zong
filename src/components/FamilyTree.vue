@@ -43,18 +43,9 @@ function handleEditMember() {
     <div class="couple-container">
       <FamilyMemberCard 
         :member="tree" 
+        :spouse="tree.spouse"
         :editable="editable"
         @edit="handleEditMember"
-      />
-      
-      <div v-if="tree.spouse" class="spouse-connector">
-        <span class="marriage-line">⚭</span>
-      </div>
-      
-      <FamilyMemberCard 
-        v-if="tree.spouse" 
-        :member="tree.spouse" 
-        :is-spouse="true" 
       />
     </div>
     
@@ -108,19 +99,7 @@ function handleEditMember() {
 .couple-container {
   display: flex;
   align-items: center;
-  gap: 4px;
-}
-
-.spouse-connector {
-  display: flex;
-  align-items: center;
   justify-content: center;
-  padding: 0 4px;
-}
-
-.marriage-line {
-  font-size: 16px;
-  color: #333;
 }
 
 .children-section {
