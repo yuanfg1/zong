@@ -1,207 +1,93 @@
-<script setup>
-import { ref, computed } from 'vue'
-import FamilyTree from './components/FamilyTree.vue'
-import FamilyMemberEditor from './components/FamilyMemberEditor.vue'
-import AddChildModal from './components/AddChildModal.vue'
-import DraggableTree from './components/DraggableTree.vue'
-import { familyTreeData, countGenerations } from './data/familyTree.js'
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
+import MindMap from './components/MindMap.vue'
+import AuthForm from './components/AuthForm.vue'
+import { supabase } from './supabase'
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 
-const familyTree = ref(JSON.parse(JSON.stringify(familyTreeData)))
-const isEditable = ref(false)
-const showEditor = ref(false)
-const showAddChild = ref(false)
-const editingMember = ref(null)
-const parentForChild = ref(null)
+const user = ref<any>(null)
+const loading = ref(true)
 
-const totalGenerations = computed(() => countGenerations(familyTree.value))
-
-function findMemberById(tree, id) {
-  if (tree.id === id) return tree
-  if (tree.children) {
-    for (const child of tree.children) {
-      const found = findMemberById(child, id)
-      if (found) return found
-    }
+const handleAuthStateChange = (event: AuthChangeEvent, session: Session | null) => {
+  if (session) {
+    user.value = session.user
+  } else {
+    user.value = null
   }
-  return null
+  loading.value = false
 }
 
-function updateMember(updatedMember) {
-  const member = findMemberById(familyTree.value, updatedMember.id)
-  if (member) {
-    Object.assign(member, updatedMember)
+const logout = async () => {
+  const { error } = await supabase.auth.signOut()
+  if (error) {
+    console.error('登出失败:', error)
   }
-  showEditor.value = false
 }
 
-function deleteMember(memberId) {
-  function removeFromTree(tree, parent, index) {
-    if (tree.children) {
-      for (let i = 0; i < tree.children.length; i++) {
-        if (tree.children[i].id === memberId) {
-          tree.children.splice(i, 1)
-          return true
-        }
-        if (removeFromTree(tree.children[i], tree, i)) {
-          return true
-        }
-      }
-    }
-    return false
+let authSubscription: { unsubscribe: () => void } | null = null
+
+onMounted(() => {
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    user.value = session?.user || null
+    loading.value = false
+  })
+  
+  authSubscription = supabase.auth.onAuthStateChange(handleAuthStateChange).data.subscription
+})
+
+onUnmounted(() => {
+  if (authSubscription) {
+    authSubscription.unsubscribe()
   }
-  removeFromTree(familyTree.value, null, 0)
-  showEditor.value = false
-}
-
-function handleEditMember(member) {
-  editingMember.value = member
-  showEditor.value = true
-}
-
-function handleAddChild(parentId) {
-  parentForChild.value = parentId
-  showAddChild.value = true
-}
-
-function addChild({ parentId, child }) {
-  const parent = findMemberById(familyTree.value, parentId)
-  if (parent) {
-    if (!parent.children) {
-      parent.children = []
-    }
-    parent.children.push(child)
-  }
-  showAddChild.value = false
-}
-
-function toggleEditMode() {
-  isEditable.value = !isEditable.value
-  showEditor.value = false
-  showAddChild.value = false
-}
+})
 </script>
 
 <template>
-  <div class="app">
-    <header class="header">
-      <h1>家谱代序图</h1>
-      <p class="subtitle">共 {{ totalGenerations }} 代家族成员</p>
-      <button 
-        class="edit-toggle-btn" 
-        :class="{ 'active': isEditable }"
-        @click="toggleEditMode"
-      >
-        {{ isEditable ? '✓ 编辑模式' : '✏️ 编辑模式' }}
-      </button>
-    </header>
-    
-    <main class="main-content">
-      <div class="tree-container">
-        <DraggableTree>
-          <FamilyTree 
-            :tree="familyTree" 
-            :editable="isEditable"
-            @editMember="handleEditMember"
-          />
-        </DraggableTree>
-      </div>
-    </main>
-    
-    <footer class="footer">
-      <p>点击「收起/展开」按钮可以折叠或展开子孙后代</p>
-      <p v-if="isEditable" class="edit-tip">💡 将鼠标悬停在成员卡片上可以看到编辑按钮</p>
-    </footer>
-    
-    <FamilyMemberEditor 
-      v-if="editingMember"
-      :member="editingMember"
-      :is-open="showEditor"
-      @close="showEditor = false"
-      @save="updateMember"
-      @add-child="handleAddChild"
-      @delete="deleteMember"
-    />
-    
-    <AddChildModal 
-      :parent-id="parentForChild"
-      :is-open="showAddChild"
-      @close="showAddChild = false"
-      @add="addChild"
-    />
+  <div v-if="loading" class="loading">
+    <div class="spinner"></div>
   </div>
+  
+  <AuthForm v-else-if="!user" />
+  
+  <MindMap v-else :user="user" @logout="logout" />
 </template>
 
-<style scoped>
-.app {
-  min-height: 100vh;
-  background: white;
-  padding: 24px;
-}
-
-.header {
-  text-align: center;
-  margin-bottom: 32px;
-}
-
-.header h1 {
-  font-size: 2.5rem;
-  color: #333;
+<style>
+* {
   margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-.subtitle {
-  color: #666;
-  font-size: 1.1rem;
-  margin-top: 8px;
+html, body {
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-.edit-toggle-btn {
-  margin-top: 16px;
-  padding: 10px 24px;
-  font-size: 1rem;
-  border: none;
-  border-radius: 30px;
-  cursor: pointer;
-  transition: all 0.3s;
-  background: #f0f0f0;
-  color: #333;
-  border: 2px solid #ddd;
+#app {
+  width: 100%;
+  height: 100%;
 }
 
-.edit-toggle-btn:hover {
-  background: #e0e0e0;
-}
-
-.edit-toggle-btn.active {
-  background: #4CAF50;
-  border-color: #4CAF50;
-  color: white;
-}
-
-.main-content {
+.loading {
   display: flex;
   justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
-.tree-container {
-  background: white;
-  padding: 32px;
-  max-width: 1200px;
-  width: 100%;
-  overflow: auto;
-  min-height: 400px;
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
-.footer {
-  text-align: center;
-  margin-top: 24px;
-  color: #666;
-  font-size: 14px;
-}
-
-.edit-tip {
-  margin-top: 8px;
-  color: #333;
-  font-weight: 500;
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

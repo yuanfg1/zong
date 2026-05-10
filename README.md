@@ -1,94 +1,42 @@
-# Vue GitHub App
+# .
 
-一个简单的 Vue 3 应用，准备部署到 GitHub Pages。
+This template should help get you started developing with Vue 3 in Vite.
 
-## 技术栈
+## Recommended IDE Setup
 
-- Vue 3
-- Vite
+[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
 
-## 安装依赖
+## Recommended Browser Setup
 
-```bash
+- Chromium-based browsers (Chrome, Edge, Brave, etc.):
+  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
+  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
+- Firefox:
+  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
+  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+
+## Type Support for `.vue` Imports in TS
+
+TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+
+## Customize configuration
+
+See [Vite Configuration Reference](https://vite.dev/config/).
+
+## Project Setup
+
+```sh
 npm install
 ```
 
-## 开发运行
+### Compile and Hot-Reload for Development
 
-```bash
+```sh
 npm run dev
 ```
 
-## 构建生产版本
+### Type-Check, Compile and Minify for Production
 
-```bash
+```sh
 npm run build
-```
-
-## 预览生产构建
-
-```bash
-npm run preview
-```
-
-## 部署到 GitHub Pages
-
-### 1. 修改 vite.config.js
-
-将 `base` 配置改为你的仓库名称：
-
-```js
-export default defineConfig({
-  base: '/你的仓库名/'
-})
-```
-
-### 2. 构建项目
-
-```bash
-npm run build
-```
-
-### 3. 部署方式一：使用 gh-pages 工具
-
-安装 gh-pages：
-
-```bash
-npm install -D gh-pages
-```
-
-在 package.json 添加脚本：
-
-```json
-{
-  "scripts": {
-    "deploy": "gh-pages -d dist"
-  }
-}
-```
-
-运行部署：
-
-```bash
-npm run deploy
-```
-
-### 4. 部署方式二：手动部署
-
-1. 将 `dist` 目录的内容推送到 `gh-pages` 分支
-2. 在 GitHub 仓库设置中启用 GitHub Pages，选择 `gh-pages` 分支
-
-## 项目结构
-
-```
-vue-github-app/
-├── src/
-│   ├── components/
-│   │   └── HelloWorld.vue
-│   ├── App.vue
-│   ├── main.js
-│   └── style.css
-├── index.html
-├── package.json
-└── vite.config.js
 ```
