@@ -271,7 +271,7 @@ const importFromExcel = () => {
         
         for (let j = 0; j < currentRow.length; j++) {
           const name = currentRow[j]
-          if (!name.trim()) continue
+          if (!name || !name.trim()) continue
           
           const node: Node = {
             id: `node-${Date.now()}-${name}-${j}`,
@@ -374,7 +374,8 @@ const handleSearch = () => {
   searchResults.value = searchNodes(searchQuery.value)
   currentSearchIndex.value = 0
   if (searchResults.value.length > 0) {
-    selectAndScrollToNode(searchResults.value[0])
+    const firstResult = searchResults.value[0]
+    if (firstResult) selectAndScrollToNode(firstResult)
   }
 }
 
@@ -405,13 +406,15 @@ const selectAndScrollToNode = (node: Node) => {
 const nextSearchResult = () => {
   if (searchResults.value.length === 0) return
   currentSearchIndex.value = (currentSearchIndex.value + 1) % searchResults.value.length
-  selectAndScrollToNode(searchResults.value[currentSearchIndex.value])
+  const nextResult = searchResults.value[currentSearchIndex.value]
+  if (nextResult) selectAndScrollToNode(nextResult)
 }
 
 const prevSearchResult = () => {
   if (searchResults.value.length === 0) return
   currentSearchIndex.value = (currentSearchIndex.value - 1 + searchResults.value.length) % searchResults.value.length
-  selectAndScrollToNode(searchResults.value[currentSearchIndex.value])
+  const prevResult = searchResults.value[currentSearchIndex.value]
+  if (prevResult) selectAndScrollToNode(prevResult)
 }
 
 const clearSearch = () => {
@@ -596,42 +599,50 @@ const generateConnections = (node: Node): Connection[] => {
     
     if (node.children.length === 1) {
       const child = node.children[0]
-      const childWidth = getNodeWidth(child)
-      const childX = child.x + childWidth / 2
-      const childY = child.y
-      
-      const path = `M ${startX} ${startY} L ${startX} ${yLine} L ${childX} ${yLine} L ${childX} ${childY}`
-      result.push({ path })
-    } else {
-      const firstChild = node.children[0]
-      const lastChild = node.children[node.children.length - 1]
-      
-      const firstChildWidth = getNodeWidth(firstChild)
-      const lastChildWidth = getNodeWidth(lastChild)
-      const leftX = firstChild.x + firstChildWidth / 2
-      const rightX = lastChild.x + lastChildWidth / 2
-      
-      const path1 = `M ${startX} ${startY} L ${startX} ${yLine}`
-      result.push({ path: path1 })
-      
-      const path2 = `M ${startX} ${yLine} L ${leftX} ${yLine}`
-      result.push({ path: path2 })
-      
-      const path3 = `M ${leftX} ${yLine} L ${rightX} ${yLine}`
-      result.push({ path: path3 })
-      
-      node.children.forEach((child) => {
+      if (child) {
         const childWidth = getNodeWidth(child)
         const childX = child.x + childWidth / 2
         const childY = child.y
-        const path = `M ${childX} ${yLine} L ${childX} ${childY}`
+
+        const path = `M ${startX} ${startY} L ${startX} ${yLine} L ${childX} ${yLine} L ${childX} ${childY}`
         result.push({ path })
-      })
+      }
+    } else {
+      const firstChild = node.children[0]
+      const lastChild = node.children[node.children.length - 1]
+
+      if (firstChild && lastChild) {
+        const firstChildWidth = getNodeWidth(firstChild)
+        const lastChildWidth = getNodeWidth(lastChild)
+        const leftX = firstChild.x + firstChildWidth / 2
+        const rightX = lastChild.x + lastChildWidth / 2
+
+        const path1 = `M ${startX} ${startY} L ${startX} ${yLine}`
+        result.push({ path: path1 })
+
+        const path2 = `M ${startX} ${yLine} L ${leftX} ${yLine}`
+        result.push({ path: path2 })
+
+        const path3 = `M ${leftX} ${yLine} L ${rightX} ${yLine}`
+        result.push({ path: path3 })
+
+        node.children.forEach((child) => {
+          if (child) {
+            const childWidth = getNodeWidth(child)
+            const childX = child.x + childWidth / 2
+            const childY = child.y
+            const path = `M ${childX} ${yLine} L ${childX} ${childY}`
+            result.push({ path })
+          }
+        })
+      }
     }
   }
   
   node.children.forEach(child => {
-    result.push(...generateConnections(child))
+    if (child) {
+      result.push(...generateConnections(child))
+    }
   })
   
   return result
