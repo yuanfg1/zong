@@ -9,6 +9,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   logout: []
+  goProfile: []
 }>()
 
 interface Node {
@@ -87,12 +88,25 @@ const dragStart = reactive({ x: 0, y: 0 })
 const scrollStart = reactive({ left: 0, top: 0 })
 
 const scale = ref(1)
+const targetScale = ref(1)
 const minScale = 0.25
 const maxScale = 2
+let animationFrameId: number | null = null
 
 const touchStartDist = ref(0)
 const touchStartScale = ref(1)
 const isPinching = ref(false)
+
+const smoothScale = () => {
+  const diff = targetScale.value - scale.value
+  if (Math.abs(diff) < 0.001) {
+    scale.value = targetScale.value
+    animationFrameId = null
+    return
+  }
+  scale.value += diff * 0.2
+  animationFrameId = requestAnimationFrame(smoothScale)
+}
 
 const colors: readonly string[] = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f97316', 
@@ -765,22 +779,29 @@ const handleWheel = (event: WheelEvent) => {
   const mouseX = event.clientX - rect.left
   const mouseY = event.clientY - rect.top
   
-  const delta = event.deltaY > 0 ? -0.1 : 0.1
-  const newScale = Math.max(minScale, Math.min(maxScale, scale.value + delta))
+  const zoomSpeed = 0.0015
+  const delta = event.deltaY * zoomSpeed
+  const newScale = Math.max(minScale, Math.min(maxScale, targetScale.value - delta))
   
-  const scaleDelta = newScale / scale.value
+  const scaleDelta = newScale / targetScale.value
   
   const newScrollLeft = mouseX - (mouseX - containerEl.scrollLeft) * scaleDelta
   const newScrollTop = mouseY - (mouseY - containerEl.scrollTop) * scaleDelta
   
-  scale.value = newScale
-  
+  targetScale.value = newScale
   containerEl.scrollLeft = newScrollLeft
   containerEl.scrollTop = newScrollTop
+  
+  if (!animationFrameId) {
+    smoothScale()
+  }
 }
 
 const resetView = () => {
-  scale.value = 1
+  targetScale.value = 1
+  if (!animationFrameId) {
+    smoothScale()
+  }
   if (container.value) {
     container.value.scrollLeft = 0
     container.value.scrollTop = 0
@@ -799,7 +820,7 @@ const handleTouchStart = (event: TouchEvent) => {
     const touch1 = event.touches[0] as Touch
     const touch2 = event.touches[1] as Touch
     touchStartDist.value = getTouchDistance(touch1, touch2)
-    touchStartScale.value = scale.value
+    touchStartScale.value = targetScale.value
   }
 }
 
@@ -820,10 +841,11 @@ const handleTouchMove = (event: TouchEvent) => {
     const centerX = (touch1.clientX + touch2.clientX) / 2 - rect.left
     const centerY = (touch1.clientY + touch2.clientY) / 2 - rect.top
     
-    const scrollDelta = newScale / scale.value
+    const scrollDelta = newScale / targetScale.value
     const newScrollLeft = centerX - (centerX - containerEl.scrollLeft) * scrollDelta
     const newScrollTop = centerY - (centerY - containerEl.scrollTop) * scrollDelta
     
+    targetScale.value = newScale
     scale.value = newScale
     containerEl.scrollLeft = newScrollLeft
     containerEl.scrollTop = newScrollTop
@@ -848,6 +870,9 @@ onUnmounted(() => {
   window.removeEventListener('resize', updateLayout)
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+  }
 })
 </script>
 
@@ -930,11 +955,10 @@ onUnmounted(() => {
       
       <button 
         class="btn btn-outline" 
-        @click="handleAdminToggle"
+        @click="$emit('goProfile')"
       >
-        退出登录
+        个人中心
       </button>
-      
       <div class="user-info">
         <span class="user-label">当前账号:</span>
         <span class="user-phone">{{ props.user?.email?.replace('@example.com', '') || '未知' }}</span>

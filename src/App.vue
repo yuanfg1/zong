@@ -2,11 +2,13 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import MindMap from './components/MindMap.vue'
 import AuthForm from './components/AuthForm.vue'
+import Profile from './components/Profile.vue'
 import { supabase } from './supabase'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 
 const user = ref<any>(null)
 const loading = ref(true)
+const currentPage = ref<'mindmap' | 'profile'>('mindmap')
 
 const handleAuthStateChange = (event: AuthChangeEvent, session: Session | null) => {
   if (session) {
@@ -22,6 +24,14 @@ const logout = async () => {
   if (error) {
     console.error('登出失败:', error)
   }
+}
+
+const goProfile = () => {
+  currentPage.value = 'profile'
+}
+
+const goMindMap = () => {
+  currentPage.value = 'mindmap'
 }
 
 let authSubscription: { unsubscribe: () => void } | null = null
@@ -49,7 +59,18 @@ onUnmounted(() => {
   
   <AuthForm v-else-if="!user" />
   
-  <MindMap v-else :user="user" @logout="logout" />
+  <MindMap 
+    v-else-if="currentPage === 'mindmap'" 
+    :user="user" 
+    @logout="logout"
+    @go-profile="goProfile"
+  />
+  
+  <Profile 
+    v-else-if="currentPage === 'profile'"
+    @logout="logout"
+    @back="goMindMap"
+  />
 </template>
 
 <style>
