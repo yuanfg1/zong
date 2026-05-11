@@ -32,6 +32,13 @@ const editMode = ref(false)
 const isNodeDragging = ref(false)
 const draggedNode = ref<Node | null>(null)
 const dragOverNode = ref<Node | null>(null)
+const showSidebar = ref(true)
+
+onMounted(() => {
+  if (window.innerWidth <= 768) {
+    showSidebar.value = false
+  }
+})
 
 const isDragging = ref(false)
 const dragStart = reactive({ x: 0, y: 0 })
@@ -498,9 +505,10 @@ const handleDragEnd = () => {
   dragOverNode.value = null
 }
 
+const DEFAULT_MAP_NAME = '组织结构图'
+
 const saveToDatabase = async () => {
-  const mapName = prompt('请输入思维导图名称:', '组织结构图')
-  if (!mapName) return
+  const mapName = DEFAULT_MAP_NAME
   
   try {
     const { data, error } = await supabase
@@ -530,52 +538,17 @@ const loadFromDatabase = async () => {
     const { data, error } = await supabase
       .from('mindmaps')
       .select('id, title, data')
+      .eq('id', DEFAULT_MAP_NAME.toLowerCase().replace(/\s+/g, '-'))
+      .single()
     
-    if (error) {
-      console.error('获取列表失败:', error)
-      return
-    }
-    
-    if (!data || data.length === 0) {
+    if (error || !data) {
       console.log('数据库中没有思维导图，使用默认数据')
       updateLayout()
       return
     }
     
-    if (data.length === 1) {
-      const mapData = data[0]
-      if (mapData && mapData.data) {
-        const loadedData = JSON.parse(mapData.data)
-        Object.assign(root.value, loadedData)
-      }
-      updateLayout()
-      return
-    }
-    
-    const options = data.map((item: any) => 
-      `\n${item.id}: ${item.title}`
-    ).join('')
-    
-    const selectedId = prompt(`请选择要加载的思维导图:${options}\n\n输入ID:`)
-    if (!selectedId) {
-      updateLayout()
-      return
-    }
-    
-    const { data: mapData, error: fetchError } = await supabase
-      .from('mindmaps')
-      .select('data')
-      .eq('id', selectedId)
-      .single()
-    
-    if (fetchError) {
-      console.error('加载失败:', fetchError)
-      updateLayout()
-      return
-    }
-    
-    if (mapData && mapData.data) {
-      const loadedData = JSON.parse(mapData.data)
+    if (data && data.data) {
+      const loadedData = JSON.parse(data.data)
       Object.assign(root.value, loadedData)
     }
     updateLayout()
@@ -820,9 +793,10 @@ onUnmounted(() => {
 
 <template>
   <div class="org-chart-container">
-    <div class="sidebar">
+    <div class="sidebar" :class="{ show: showSidebar }">
       <div class="sidebar-header">
         <h3>节点路径</h3>
+        <button class="sidebar-close" @click="showSidebar = false">×</button>
       </div>
       <div class="sidebar-content">
         <div v-if="selectedNode" class="node-path">
@@ -839,6 +813,9 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+    <button class="sidebar-toggle" @click="showSidebar = !showSidebar">
+      {{ showSidebar ? '隐藏' : '菜单' }}
+    </button>
     
     <div class="main-content">
       <div class="toolbar">
@@ -1047,6 +1024,9 @@ onUnmounted(() => {
   padding: 16px 20px;
   border-bottom: 1px solid #e2e8f0;
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .sidebar-header h3 {
@@ -1054,6 +1034,34 @@ onUnmounted(() => {
   font-size: 16px;
   font-weight: 600;
   color: white;
+}
+
+.sidebar-close {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  line-height: 1;
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .sidebar-close {
+    display: block;
+  }
+  
+  .sidebar-toggle {
+    display: flex;
+  }
+}
+
+@media (min-width: 769px) {
+  .sidebar-toggle {
+    display: none;
+  }
 }
 
 .sidebar-content {
@@ -1467,5 +1475,76 @@ onUnmounted(() => {
   word-break: break-word;
   resize: none;
   overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+  }
+  
+  .sidebar.show {
+    transform: translateX(0);
+  }
+  
+  .main-content {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+  
+  .toolbar {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  
+  .btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  
+  .search-container {
+    order: -1;
+    width: 100%;
+    border-left: none;
+    padding: 0;
+  }
+  
+  .search-input {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .spacing-control {
+    display: none;
+  }
+  
+  .scale-control {
+    margin-left: 0;
+  }
+  
+  .user-info {
+    border-left: none;
+    padding-left: 0;
+  }
+  
+  .sidebar-toggle {
+    display: flex;
+    position: fixed;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #6366f1;
+    color: white;
+    border: none;
+    border-radius: 0 8px 8px 0;
+    padding: 12px 8px;
+    cursor: pointer;
+    z-index: 999;
+    font-size: 16px;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
 }
 </style>
