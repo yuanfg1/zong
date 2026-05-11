@@ -247,13 +247,18 @@ const importFromExcel = () => {
       
       for (let row = range.s.r; row <= range.e.r; row++) {
         const rowData: string[] = []
+        let hasNonEmpty = false
+        
         for (let col = range.s.c; col <= range.e.c; col++) {
           const cell = worksheet[XLSX.utils.encode_cell({ r: row, c: col })]
           const value = cell ? cell.v : ''
-          rowData.push(String(value || '').trim())
+          const trimmed = String(value || '').trim()
+          rowData.push(trimmed)
+          if (trimmed) hasNonEmpty = true
         }
-        if (rowData.some(cell => cell)) {
-          rows.push(rowData.filter(cell => cell))
+        
+        if (hasNonEmpty) {
+          rows.push(rowData)
         }
       }
       
@@ -282,10 +287,13 @@ const importFromExcel = () => {
         
         for (let j = 0; j < currentRow.length; j++) {
           const name = currentRow[j]
-          if (!name || !name.trim()) continue
+          if (!name || !name.trim()) {
+            currentLevelNodes.push(null as any)
+            continue
+          }
           
           const node: Node = {
-            id: `node-${Date.now()}-${name}-${j}`,
+            id: `node-${Date.now()}-${name}-${j}-${i}`,
             text: name,
             x: 0,
             y: 0,
@@ -298,8 +306,20 @@ const importFromExcel = () => {
           if (i === 0) {
             rootNode.children.push(node)
           } else {
-            const parentIndex = Math.min(j, prevLevelNodes.length - 1)
-            const parentNode = prevLevelNodes[parentIndex] || prevLevelNodes[0] || rootNode
+            let parentNode = rootNode
+            
+            let searchIndex = j
+            while (searchIndex >= 0) {
+              if (prevLevelNodes[searchIndex]) {
+                parentNode = prevLevelNodes[searchIndex]
+                break
+              }
+              searchIndex--
+            }
+            
+            if (!parentNode) {
+              parentNode = rootNode
+            }
             parentNode.children.push(node)
           }
         }
@@ -1080,15 +1100,11 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  background: #f8fafc;
-  border-radius: 8px;
-  border-left: 3px solid #6366f1;
+  padding: 4px 0;
 }
 
 .path-node {
   font-size: 14px;
-  font-weight: 500;
   color: #334155;
 }
 
