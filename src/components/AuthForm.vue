@@ -96,6 +96,22 @@ const handleSubmit = async () => {
       
       if (loginError) {
         error.value = loginError.message
+      } else {
+        const adminPhone = '16683122850'
+        const role = phone.value === adminPhone ? 'admin' : 'user'
+        
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          await supabase.from('user_profiles').upsert({
+            id: user.id,
+            phone: phone.value,
+            role: role
+          })
+        }
+        
+        if (role === 'admin') {
+          localStorage.setItem('mindmap_admin', 'true')
+        }
       }
     } else {
       const { data: signUpData, error: signupError } = await supabase.auth.signUp({
@@ -107,10 +123,13 @@ const handleSubmit = async () => {
         error.value = signupError.message
       } else {
         if (signUpData.user) {
+          const adminPhone = '16683122850'
+          const role = phone.value === adminPhone ? 'admin' : 'user'
+          
           await supabase.from('user_profiles').upsert({
             id: signUpData.user.id,
             phone: phone.value,
-            role: 'user'
+            role: role
           })
         }
         alert('注册成功，请检查邮箱验证')

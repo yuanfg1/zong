@@ -33,11 +33,53 @@ const isNodeDragging = ref(false)
 const draggedNode = ref<Node | null>(null)
 const dragOverNode = ref<Node | null>(null)
 const showSidebar = ref(true)
+const isAdmin = ref(false)
+const adminPhone = '16683122850'
 
-onMounted(() => {
+const checkAdmin = (phone: string) => {
+  if (phone === adminPhone) {
+    isAdmin.value = true
+    localStorage.setItem('mindmap_admin', 'true')
+  } else {
+    isAdmin.value = false
+  }
+}
+
+const handleAdminToggle = async () => {
+  try {
+    await supabase.auth.signOut()
+    isAdmin.value = false
+    localStorage.removeItem('mindmap_admin')
+    emit('logout')
+  } catch (error) {
+    console.error('退出登录失败:', error)
+    alert('退出登录失败')
+  }
+}
+
+onMounted(async () => {
   if (window.innerWidth <= 768) {
     showSidebar.value = false
   }
+  
+  if (props.user) {
+    const phone = props.user.email?.replace('@example.com', '')
+    if (phone === adminPhone) {
+      isAdmin.value = true
+      localStorage.setItem('mindmap_admin', 'true')
+      
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('user_profiles').upsert({
+          id: user.id,
+          phone: phone,
+          role: 'admin'
+        })
+      }
+    }
+  }
+  
+  await loadFromDatabase()
 })
 
 const isDragging = ref(false)
@@ -837,13 +879,22 @@ onUnmounted(() => {
     
     <div class="main-content">
       <div class="toolbar">
-      <button class="btn btn-primary" @click="addChildNode">
+      <button 
+        v-if="isAdmin" 
+        class="btn btn-primary" 
+        @click="addChildNode"
+      >
         + 添加子节点
       </button>
-      <button class="btn btn-secondary" @click="addParentNode">
+      <button 
+        v-if="isAdmin" 
+        class="btn btn-secondary" 
+        @click="addParentNode"
+      >
         + 添加父节点
       </button>
       <button 
+        v-if="isAdmin"
         class="btn btn-danger" 
         @click="deleteNode"
         :disabled="!selectedNode || selectedNode.id === 'root'"
@@ -851,22 +902,44 @@ onUnmounted(() => {
         删除节点
       </button>
       
-      <button class="btn btn-success" @click="saveToDatabase">
+      <button 
+        v-if="isAdmin" 
+        class="btn btn-success" 
+        @click="saveToDatabase"
+      >
         保存到数据库
       </button>
       <button class="btn btn-info" @click="loadFromDatabase">
         从数据库加载
       </button>
-      <button class="btn btn-warning" @click="importFromExcel">
+      <button 
+        v-if="isAdmin" 
+        class="btn btn-warning" 
+        @click="importFromExcel"
+      >
         导入 Excel
       </button>
       <button 
+        v-if="isAdmin"
         class="btn" 
         :class="editMode ? 'btn-success' : 'btn-secondary'"
         @click="editMode = !editMode"
       >
         {{ editMode ? '退出编辑模式' : '编辑模式' }}
       </button>
+      
+      <button 
+        class="btn btn-outline" 
+        @click="handleAdminToggle"
+      >
+        退出登录
+      </button>
+      
+      <div class="user-info">
+        <span class="user-label">当前账号:</span>
+        <span class="user-phone">{{ props.user?.email?.replace('@example.com', '') || '未知' }}</span>
+        <span v-if="isAdmin" class="admin-badge">管理员</span>
+      </div>
       
       <div class="search-container">
         <div class="search-wrapper">
@@ -899,7 +972,7 @@ onUnmounted(() => {
         </div>
       </div>
       
-      <div class="spacing-control">
+      <div v-if="isAdmin" class="spacing-control">
         <div class="spacing-item">
           <label>水平间距</label>
           <input 
@@ -1096,14 +1169,23 @@ onUnmounted(() => {
 
 .path-item {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
+  justify-content: center;
+  padding: 8px 0;
 }
 
 .path-node {
-  font-size: 14px;
+  font-size: 12px;
   color: #334155;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 4px 6px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: center;
 }
 
 .no-selection {
@@ -1264,15 +1346,29 @@ onUnmounted(() => {
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin-left: auto;
-  padding-left: 20px;
+  padding-left: 16px;
   border-left: 1px solid #e2e8f0;
 }
 
-.user-email {
+.user-label {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.user-phone {
   font-size: 14px;
-  color: #64748b;
+  color: #334155;
+  font-weight: 500;
+}
+
+.admin-badge {
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: white;
+  font-size: 11px;
+  border-radius: 10px;
 }
 
 .search-container {
