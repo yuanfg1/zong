@@ -306,20 +306,18 @@ const importFromExcel = () => {
           if (i === 0) {
             rootNode.children.push(node)
           } else {
-            let parentNode = rootNode
+            let parentNode: Node = rootNode
             
             let searchIndex = j
             while (searchIndex >= 0) {
-              if (prevLevelNodes[searchIndex]) {
-                parentNode = prevLevelNodes[searchIndex]
+              const foundNode = prevLevelNodes[searchIndex]
+              if (foundNode) {
+                parentNode = foundNode
                 break
               }
               searchIndex--
             }
             
-            if (!parentNode) {
-              parentNode = rootNode
-            }
             parentNode.children.push(node)
           }
         }
