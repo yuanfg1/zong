@@ -41,6 +41,10 @@ const scale = ref(1)
 const minScale = 0.25
 const maxScale = 2
 
+const touchStartDist = ref(0)
+const touchStartScale = ref(1)
+const isPinching = ref(false)
+
 const colors: readonly string[] = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f97316', 
   '#eab308', '#22c55e', '#14b8a6', '#3b82f6'
@@ -750,6 +754,55 @@ const resetView = () => {
   }
 }
 
+const getTouchDistance = (touch1: Touch, touch2: Touch): number => {
+  const dx = touch2.clientX - touch1.clientX
+  const dy = touch2.clientY - touch1.clientY
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
+const handleTouchStart = (event: TouchEvent) => {
+  if (event.touches.length === 2) {
+    isPinching.value = true
+    const touch1 = event.touches[0] as Touch
+    const touch2 = event.touches[1] as Touch
+    touchStartDist.value = getTouchDistance(touch1, touch2)
+    touchStartScale.value = scale.value
+  }
+}
+
+const handleTouchMove = (event: TouchEvent) => {
+  if (event.touches.length === 2 && isPinching.value) {
+    event.preventDefault()
+    
+    const containerEl = container.value
+    if (!containerEl) return
+    
+    const touch1 = event.touches[0] as Touch
+    const touch2 = event.touches[1] as Touch
+    const currentDist = getTouchDistance(touch1, touch2)
+    const scaleDelta = currentDist / touchStartDist.value
+    const newScale = Math.max(minScale, Math.min(maxScale, touchStartScale.value * scaleDelta))
+    
+    const rect = containerEl.getBoundingClientRect()
+    const centerX = (touch1.clientX + touch2.clientX) / 2 - rect.left
+    const centerY = (touch1.clientY + touch2.clientY) / 2 - rect.top
+    
+    const scrollDelta = newScale / scale.value
+    const newScrollLeft = centerX - (centerX - containerEl.scrollLeft) * scrollDelta
+    const newScrollTop = centerY - (centerY - containerEl.scrollTop) * scrollDelta
+    
+    scale.value = newScale
+    containerEl.scrollLeft = newScrollLeft
+    containerEl.scrollTop = newScrollTop
+  }
+}
+
+const handleTouchEnd = (event: TouchEvent) => {
+  if (event.touches.length < 2) {
+    isPinching.value = false
+  }
+}
+
 onMounted(async () => {
   nextTick(() => {
     window.addEventListener('resize', updateLayout)
@@ -898,6 +951,9 @@ onUnmounted(() => {
       @click="selectedNode = null"
       @mousedown="handleMouseDown"
       @wheel="handleWheel"
+      @touchstart="handleTouchStart"
+      @touchmove="handleTouchMove"
+      @touchend="handleTouchEnd"
     >
       <div 
         ref="content" 
