@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import MindMap from './components/MindMap.vue'
 import AuthForm from './components/AuthForm.vue'
 import Profile from './components/Profile.vue'
+import Map from './components/Map.vue'
 import { supabase } from './supabase'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 
 const user = ref<any>(null)
 const loading = ref(true)
-const currentPage = ref<'mindmap' | 'profile'>('mindmap')
+const currentPage = ref<'mindmap' | 'profile' | 'map'>('map')
 
 const handleAuthStateChange = (event: AuthChangeEvent, session: Session | null) => {
   if (session) {
@@ -26,17 +27,44 @@ const logout = async () => {
   }
 }
 
+const updateUrl = (page: string) => {
+  const url = new URL(window.location.href)
+  url.searchParams.set('page', page)
+  window.history.replaceState({}, '', url.toString())
+}
+
 const goProfile = () => {
   currentPage.value = 'profile'
+  updateUrl('profile')
 }
 
 const goMindMap = () => {
   currentPage.value = 'mindmap'
+  updateUrl('mindmap')
 }
+
+const goMap = () => {
+  currentPage.value = 'map'
+  updateUrl('map')
+}
+
+const loadPageFromUrl = () => {
+  const url = new URL(window.location.href)
+  const page = url.searchParams.get('page') as 'mindmap' | 'profile' | 'map'
+  if (page && ['mindmap', 'profile', 'map'].includes(page)) {
+    currentPage.value = page
+  }
+}
+
+watch(currentPage, (newPage) => {
+  updateUrl(newPage)
+})
 
 let authSubscription: { unsubscribe: () => void } | null = null
 
 onMounted(() => {
+  loadPageFromUrl()
+  
   supabase.auth.getSession().then(({ data: { session } }) => {
     user.value = session?.user || null
     loading.value = false
@@ -64,12 +92,19 @@ onUnmounted(() => {
     :user="user" 
     @logout="logout"
     @go-profile="goProfile"
+    @go-map="goMap"
   />
   
   <Profile 
     v-else-if="currentPage === 'profile'"
     @logout="logout"
     @back="goMindMap"
+  />
+  
+  <Map
+    v-else-if="currentPage === 'map'"
+    @back="goMindMap"
+    @go-profile="goProfile"
   />
 </template>
 

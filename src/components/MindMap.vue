@@ -10,6 +10,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   logout: []
   goProfile: []
+  goMap: []
 }>()
 
 interface Node {
@@ -36,6 +37,7 @@ const dragOverNode = ref<Node | null>(null)
 const showSidebar = ref(true)
 const isAdmin = ref(false)
 const adminPhone = '16683122850'
+const showSpacingControl = ref(false)
 
 const checkAdmin = (phone: string) => {
   if (phone === adminPhone) {
@@ -904,19 +906,25 @@ onUnmounted(() => {
     
     <div class="main-content">
       <div class="toolbar">
+        <button 
+        class="btn btn-outline" 
+        @click="$emit('goMap')"
+      >
+        地图
+      </button>
       <button 
         v-if="isAdmin" 
         class="btn btn-primary" 
         @click="addChildNode"
       >
-        + 添加子节点
+        添加子节点
       </button>
       <button 
         v-if="isAdmin" 
         class="btn btn-secondary" 
         @click="addParentNode"
       >
-        + 添加父节点
+        添加父节点
       </button>
       <button 
         v-if="isAdmin"
@@ -924,7 +932,7 @@ onUnmounted(() => {
         @click="deleteNode"
         :disabled="!selectedNode || selectedNode.id === 'root'"
       >
-        删除节点
+        删除
       </button>
       
       <button 
@@ -932,17 +940,17 @@ onUnmounted(() => {
         class="btn btn-success" 
         @click="saveToDatabase"
       >
-        保存到数据库
+        保存
       </button>
       <button class="btn btn-info" @click="loadFromDatabase">
-        从数据库加载
+        加载
       </button>
       <button 
         v-if="isAdmin" 
         class="btn btn-warning" 
         @click="importFromExcel"
       >
-        导入 Excel
+        导入
       </button>
       <button 
         v-if="isAdmin"
@@ -959,6 +967,7 @@ onUnmounted(() => {
       >
         个人中心
       </button>
+      
       <div class="user-info">
         <span class="user-label">当前账号:</span>
         <span class="user-phone">{{ props.user?.email?.replace('@example.com', '') || '未知' }}</span>
@@ -996,34 +1005,39 @@ onUnmounted(() => {
         </div>
       </div>
       
-      <div v-if="isAdmin" class="spacing-control">
-        <div class="spacing-item">
-          <label>水平间距</label>
-          <input 
-            type="range" 
-            v-model.number="HORIZONTAL_SPACING" 
-            min="20" 
-            max="200" 
-            @change="updateLayout"
-          />
-          <span>{{ HORIZONTAL_SPACING }}px</span>
-        </div>
-        <div class="spacing-item">
-          <label>垂直间距</label>
-          <input 
-            type="range" 
-            v-model.number="VERTICAL_SPACING" 
-            min="50" 
-            max="300" 
-            @change="updateLayout"
-          />
-          <span>{{ VERTICAL_SPACING }}px</span>
+      <div v-if="isAdmin" class="spacing-control-container">
+        <button class="spacing-toggle-btn" @click="showSpacingControl = !showSpacingControl">
+          {{ showSpacingControl ? '▼' : '▲' }} 间距设置
+        </button>
+        <div v-show="showSpacingControl" class="spacing-control">
+          <div class="spacing-item">
+            <label>水平间距</label>
+            <input 
+              type="range" 
+              v-model.number="HORIZONTAL_SPACING" 
+              min="20" 
+              max="200" 
+              @change="updateLayout"
+            />
+            <span>{{ HORIZONTAL_SPACING }}px</span>
+          </div>
+          <div class="spacing-item">
+            <label>垂直间距</label>
+            <input 
+              type="range" 
+              v-model.number="VERTICAL_SPACING" 
+              min="50" 
+              max="300" 
+              @change="updateLayout"
+            />
+            <span>{{ VERTICAL_SPACING }}px</span>
+          </div>
         </div>
       </div>
       
       <div class="scale-control">
         <button class="btn btn-secondary" @click="resetView">
-          重置视图
+          重置
         </button>
         <span class="scale-display">{{ Math.round(scale * 100) }}%</span>
       </div>
@@ -1235,11 +1249,32 @@ onUnmounted(() => {
   align-items: center;
 }
 
+.spacing-control-container {
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px;
+  border-left: 1px solid #e2e8f0;
+}
+
+.spacing-toggle-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.3s;
+  text-align: left;
+}
+
+.spacing-toggle-btn:hover {
+  color: #6366f1;
+}
+
 .spacing-control {
   display: flex;
   gap: 20px;
-  padding: 0 20px;
-  border-left: 1px solid #e2e8f0;
+  padding: 8px 0;
 }
 
 .spacing-item {

@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 
 const isLogin = ref(true)
 const phone = ref('')
+const name = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const captcha = ref('')
@@ -129,6 +130,7 @@ const handleSubmit = async () => {
           await supabase.from('user_profiles').upsert({
             id: signUpData.user.id,
             phone: phone.value,
+            name: name.value || null,
             role: role
           })
         }
@@ -151,6 +153,7 @@ const handleSubmit = async () => {
 const toggleMode = () => {
   isLogin.value = !isLogin.value
   error.value = ''
+  name.value = ''
   password.value = ''
   confirmPassword.value = ''
   captcha.value = ''
@@ -175,6 +178,16 @@ generateCaptcha()
             placeholder="请输入手机号码"
             pattern="[0-9]{11}"
             required
+          />
+        </div>
+        
+        <div v-if="!isLogin" class="form-group">
+          <label for="name">姓名</label>
+          <input
+            id="name"
+            v-model="name"
+            type="text"
+            placeholder="请输入姓名"
           />
         </div>
         

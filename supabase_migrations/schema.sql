@@ -15,7 +15,10 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS user_profiles (
   id UUID PRIMARY KEY REFERENCES users(id),
   nickname TEXT,
+  name TEXT,
   avatar_url TEXT,
+  role TEXT DEFAULT 'user',
+  phone TEXT,
   theme TEXT DEFAULT 'light',
   language TEXT DEFAULT 'zh-CN',
   preferences JSONB DEFAULT '{}'::JSONB,
