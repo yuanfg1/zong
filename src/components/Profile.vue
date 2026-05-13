@@ -17,13 +17,8 @@ const passwordError = ref('')
 const nameError = ref('')
 const adminPhone = '16683122850'
 
-const activeTab = ref('mapMarkers')
-
-const markers = ref<any[]>([
-  { id: 1, name: '张三', phone: '13800138001', description: '北京市朝阳区', location: '北京' },
-  { id: 2, name: '李四', phone: '13900139002', description: '上海市浦东新区', location: '上海' },
-  { id: 3, name: '王五', phone: '', description: '广州市天河区', location: '广州' },
-])
+const activeTab = ref('personalInfo')
+const markers = ref<any[]>([])
 
 onMounted(async () => {
   const { data: { user: currentUser } } = await supabase.auth.getUser()
@@ -49,22 +44,12 @@ onMounted(async () => {
     } catch (e) {
       console.error('获取用户信息异常:', e)
     }
+    
+    await loadMarkers()
   }
 })
 
 const saveName = async () => {
-  nameError.value = ''
-  
-  if (!user.value) {
-    nameError.value = '用户信息未加载'
-    return
-  }
-  
-  if (!userName.value.trim()) {
-    nameError.value = '请输入姓名'
-    return
-  }
-  
   try {
     console.log('保存姓名:', { userId: user.value.id, name: userName.value })
     const { error } = await supabase
@@ -127,6 +112,43 @@ const changePassword = async () => {
 const goBack = () => {
   emit('back')
 }
+
+const loadMarkers = async () => {
+  try {
+    const { data, error } = await supabase.from('markers').select('*')
+    
+    if (error) {
+      console.error('加载标点失败:', error)
+      return
+    }
+
+    markers.value = data || []
+  } catch (error) {
+    console.error('加载标点时发生错误:', error)
+  }
+}
+
+const deleteMarker = async (id: number) => {
+  if (!confirm('确定要删除这个标点吗？')) return
+
+  try {
+    const { error } = await supabase
+      .from('markers')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error('删除标点失败:', error)
+      alert('删除失败')
+    } else {
+      await loadMarkers()
+      alert('删除成功')
+    }
+  } catch (error) {
+    console.error('删除标点时发生错误:', error)
+    alert('删除失败')
+  }
+}
 </script>
 
 <template>
@@ -180,7 +202,7 @@ const goBack = () => {
                 </div>
                 <div class="marker-actions">
                   <button class="action-btn edit-btn">编辑</button>
-                  <button class="action-btn delete-btn">删除</button>
+                  <button class="action-btn delete-btn" @click="deleteMarker(marker.id)">删除</button>
                 </div>
               </div>
             </div>
@@ -279,7 +301,7 @@ const goBack = () => {
   background: transparent;
   border: 2px solid #6366f1;
   color: #6366f1;
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -303,7 +325,7 @@ const goBack = () => {
   background: #ef4444;
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -316,38 +338,38 @@ const goBack = () => {
 
 .profile-main {
   display: flex;
-  max-width: 1200px;
-  margin: 40px auto;
-  padding: 0 20px;
-  gap: 24px;
+  min-height: calc(100vh - 80px);
+  margin: 0;
+  padding: 0;
+  gap: 0;
 }
 
 .profile-sidebar {
-  width: 200px;
+  width: 220px;
   flex-shrink: 0;
+  background: linear-gradient(180deg, #1e293b 0%, #334155 100%);
+  padding: 24px 0;
 }
 
 .sidebar-menu {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  padding: 12px;
+  padding: 0;
 }
 
 .menu-item {
   display: block;
   width: 100%;
-  padding: 14px 16px;
+  padding: 16px 24px;
   background: transparent;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 0;
+  font-size: 15px;
   font-weight: 500;
-  color: #475569;
+  color: #cbd5e1;
   cursor: pointer;
   text-align: left;
   transition: all 0.3s;
-  margin-bottom: 4px;
+  margin-bottom: 0;
+  border-left: 3px solid transparent;
 }
 
 .menu-item:last-child {
@@ -355,25 +377,33 @@ const goBack = () => {
 }
 
 .menu-item:hover {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: rgba(99, 102, 241, 0.1);
+  color: #f1f5f9;
+  border-left-color: rgba(99, 102, 241, 0.5);
 }
 
 .menu-item.active {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: rgba(99, 102, 241, 0.15);
   color: white;
+  border-left-color: #6366f1;
 }
 
 .profile-content {
   flex: 1;
   min-width: 0;
+  background: #f8fafc;
+  padding: 0;
+  overflow-y: auto;
 }
 
 .content-panel {
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-header {
@@ -391,12 +421,14 @@ const goBack = () => {
 
 .panel-body {
   padding: 24px;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .markers-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
 }
 
 .marker-item {
@@ -405,7 +437,12 @@ const goBack = () => {
   align-items: flex-start;
   padding: 16px;
   background: #f8fafc;
-  border-radius: 8px;
+  border-radius: 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.marker-item:last-child {
+  border-bottom: none;
 }
 
 .marker-info h4 {
@@ -425,7 +462,7 @@ const goBack = () => {
   padding: 4px 10px;
   background: #dbeafe;
   color: #1d4ed8;
-  border-radius: 20px;
+  border-radius: 0;
   font-size: 12px;
   margin-top: 8px;
 }
@@ -438,7 +475,7 @@ const goBack = () => {
 .action-btn {
   padding: 8px 14px;
   border: none;
-  border-radius: 6px;
+  border-radius: 0;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -493,7 +530,7 @@ const goBack = () => {
 .name-input {
   padding: 8px 12px;
   border: 2px solid #e2e8f0;
-  border-radius: 6px;
+  border-radius: 0;
   font-size: 14px;
   outline: none;
   width: 150px;
@@ -506,7 +543,7 @@ const goBack = () => {
 .small-btn {
   padding: 6px 12px;
   border: none;
-  border-radius: 6px;
+  border-radius: 0;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -527,7 +564,7 @@ const goBack = () => {
   padding: 4px 10px;
   background: #f1f5f9;
   border: none;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 12px;
   color: #6366f1;
   cursor: pointer;
@@ -537,7 +574,7 @@ const goBack = () => {
   padding: 4px 12px;
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: white;
-  border-radius: 20px;
+  border-radius: 0;
   font-size: 12px;
 }
 
@@ -545,7 +582,7 @@ const goBack = () => {
   padding: 4px 12px;
   background: #f1f5f9;
   color: #64748b;
-  border-radius: 20px;
+  border-radius: 0;
   font-size: 12px;
 }
 
@@ -565,7 +602,7 @@ const goBack = () => {
   width: 100%;
   padding: 12px 14px;
   border: 2px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 14px;
   outline: none;
   box-sizing: border-box;
@@ -589,7 +626,7 @@ const goBack = () => {
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;

@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS markers (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  phone TEXT,
+  description TEXT,
+  location TEXT,
+  lng NUMERIC,
+  lat NUMERIC,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_markers_created_at ON markers(created_at);

@@ -1043,7 +1043,6 @@ onUnmounted(() => {
       </div>
       
       <div class="user-info">
-        <span class="user-email">{{ props.user?.email }}</span>
         <button class="btn btn-outline" @click="emit('logout')">
           登出
         </button>
