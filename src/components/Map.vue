@@ -691,7 +691,7 @@ const drawRelationLines = async () => {
     
     if (error || !markers || markers.length < 2) return
     
-    const parentChildrenMap: Record<string, any[]> = {}
+    const parentChildrenMap: Record<string, { parent: MarkerData; children: MarkerData[] }> = {}
     
     for (let i = 0; i < markers.length; i++) {
       for (let j = i + 1; j < markers.length; j++) {
@@ -891,7 +891,7 @@ const addDynamicArrow = (fromLng: number, fromLat: number, toLng: number, toLat:
 
 const clearRelationLines = () => {
   if (lineLayer && lineLayer.length > 0 && map.value) {
-    lineLayer.forEach(line => {
+    lineLayer.forEach((line: any) => {
       map.value.remove(line)
     })
     lineLayer = null
