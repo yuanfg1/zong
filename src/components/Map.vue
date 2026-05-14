@@ -123,9 +123,11 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
     const handleLocationSuccess = (lng: number, lat: number, accuracy: number) => {
       map.value.setCenter([lng, lat])
       
-      if (accuracy > 0 && accuracy <= 100) {
+      if (accuracy > 0 && accuracy <= 1) {
+        map.value.setZoom(20)
+      } else if (accuracy > 1 && accuracy <= 10) {
         map.value.setZoom(18)
-      } else if (accuracy > 100 && accuracy <= 500) {
+      } else if (accuracy > 10 && accuracy <= 100) {
         map.value.setZoom(16)
       } else {
         map.value.setZoom(15)
@@ -156,10 +158,12 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
         map.value.add(circle)
       }
       
-      if (accuracy > 0 && accuracy <= 100) {
+      if (accuracy > 0 && accuracy <= 1) {
         showToast(`定位成功，精度: ${accuracy}米`)
-      } else if (accuracy > 0 && accuracy <= 500) {
-        showToast(`定位成功，精度: ${accuracy}米，建议开启高精度定位`)
+      } else if (accuracy > 1 && accuracy <= 10) {
+        showToast(`定位成功，精度: ${accuracy}米`)
+      } else if (accuracy > 10 && accuracy <= 100) {
+        showToast(`定位成功，精度: ${accuracy}米`)
       }
     }
 
@@ -190,7 +194,7 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
         const { lng, lat } = result.position
         const accuracy = result.accuracy || 0
         
-        if (accuracy > 0 && accuracy <= 1000) {
+        if (accuracy > 0 && accuracy <= 100) {
           handleLocationSuccess(lng, lat, accuracy)
           resolve()
         } else {
@@ -242,9 +246,11 @@ const handleLocationSuccess = (lng: number, lat: number, accuracy: number) => {
   
   map.value.setCenter([lng, lat])
   
-  if (accuracy > 0 && accuracy <= 100) {
+  if (accuracy > 0 && accuracy <= 1) {
+    map.value.setZoom(20)
+  } else if (accuracy > 1 && accuracy <= 10) {
     map.value.setZoom(18)
-  } else if (accuracy > 100 && accuracy <= 500) {
+  } else if (accuracy > 10 && accuracy <= 100) {
     map.value.setZoom(16)
   } else {
     map.value.setZoom(15)
