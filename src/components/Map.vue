@@ -91,11 +91,89 @@ const initMap = async () => {
   }
 }
 
+const checkLocationPermission = async (): Promise<boolean> => {
+  if (!('permissions' in navigator)) {
+    return true
+  }
+  try {
+    const result = await navigator.permissions.query({ name: 'geolocation' })
+    if (result.state === 'granted') {
+      return true
+    } else if (result.state === 'prompt') {
+      return true
+    } else {
+      showToast('位置权限已被拒绝，请在浏览器设置中开启')
+      return false
+    }
+  } catch {
+    return true
+  }
+}
+
 const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
-  return new Promise<void>((resolve) => {
+  return new Promise<void>(async (resolve) => {
+    const hasPermission = await checkLocationPermission()
+    if (!hasPermission) {
+      resolve()
+      return
+    }
+
+    const handleLocationSuccess = (lng: number, lat: number, accuracy: number) => {
+      map.value.setCenter([lng, lat])
+      
+      if (accuracy > 0 && accuracy <= 100) {
+        map.value.setZoom(18)
+      } else if (accuracy > 100 && accuracy <= 500) {
+        map.value.setZoom(16)
+      } else {
+        map.value.setZoom(15)
+      }
+      
+      if (showMarker) {
+        const marker = new AMap.Marker({
+          position: [lng, lat],
+          title: `我的位置 (精度: ${accuracy > 0 ? accuracy + 'm' : '未知'})`,
+          icon: new AMap.Icon({
+            size: new AMap.Size(32, 32),
+            image: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%236366f1"%3E%3Cpath d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/%3E%3C/svg%3E',
+          }),
+        })
+        map.value.add(marker)
+      }
+      
+      if (accuracy > 0 && accuracy <= 1000) {
+        const circle = new AMap.Circle({
+          center: [lng, lat],
+          radius: accuracy,
+          strokeColor: '#6366f1',
+          strokeOpacity: 0.8,
+          strokeWeight: 2,
+          fillColor: '#6366f1',
+          fillOpacity: 0.1
+        })
+        map.value.add(circle)
+      }
+      
+      if (accuracy > 0 && accuracy <= 100) {
+        showToast(`定位成功，精度: ${accuracy}米`)
+      } else if (accuracy > 0 && accuracy <= 500) {
+        showToast(`定位成功，精度: ${accuracy}米，建议开启高精度定位`)
+      }
+    }
+
+    const handleLocationError = (errorMsg: string, fallback: boolean = true) => {
+      console.log('定位失败:', errorMsg)
+      if (fallback) {
+        getLocationWithBrowserAPI(AMap, showMarker, resolve)
+      } else {
+        showToast('获取位置失败，请确保已授权位置权限并开启GPS')
+        resolve()
+      }
+    }
+
     const geolocation = new AMap.Geolocation({
       enableHighAccuracy: true,
-      timeout: 15000,
+      timeout: 10000,
       maximumAge: 0,
       convert: true,
       showButton: false,
@@ -110,47 +188,88 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
         const { lng, lat } = result.position
         const accuracy = result.accuracy || 0
         
-        map.value.setCenter([lng, lat])
-        
-        if (accuracy > 0 && accuracy <= 100) {
-          map.value.setZoom(18)
-        } else if (accuracy > 100 && accuracy <= 500) {
-          map.value.setZoom(16)
-        } else {
-          map.value.setZoom(15)
-        }
-        
-        if (showMarker) {
-          const marker = new AMap.Marker({
-            position: [lng, lat],
-            title: `我的位置 (精度: ${accuracy > 0 ? accuracy + 'm' : '未知'})`,
-            icon: new AMap.Icon({
-              size: new AMap.Size(32, 32),
-              image: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%236366f1"%3E%3Cpath d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/%3E%3C/svg%3E',
-            }),
-          })
-          map.value.add(marker)
-        }
-        
         if (accuracy > 0 && accuracy <= 1000) {
-          const circle = new AMap.Circle({
-            center: [lng, lat],
-            radius: accuracy,
-            strokeColor: '#6366f1',
-            strokeOpacity: 0.8,
-            strokeWeight: 2,
-            fillColor: '#6366f1',
-            fillOpacity: 0.1
-          })
-          map.value.add(circle)
+          handleLocationSuccess(lng, lat, accuracy)
+          resolve()
+        } else {
+          handleLocationError(`高德定位精度不足: ${accuracy}m`, true)
         }
       } else {
-        console.log('获取位置失败，使用默认位置:', result.message)
-        showToast('获取位置失败，请确保已授权位置权限')
+        handleLocationError(`高德定位失败: ${result.message || result}`, true)
       }
-      resolve()
     })
   })
+}
+
+const getLocationWithBrowserAPI = (AMap: any, showMarker: boolean, resolve: () => void) => {
+  if (!navigator.geolocation) {
+    showToast('您的浏览器不支持地理定位')
+    resolve()
+    return
+  }
+
+  const options: PositionOptions = {
+    enableHighAccuracy: true,
+    timeout: 15000,
+    maximumAge: 0
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const { longitude: lng, latitude: lat, accuracy } = position.coords
+      console.log('浏览器原生定位成功:', { lng, lat, accuracy })
+      handleLocationSuccess(lng, lat, accuracy)
+      resolve()
+    },
+    (error) => {
+      const errorMessages: Record<number, string> = {
+        1: '用户拒绝了位置权限',
+        2: '获取位置失败',
+        3: '定位超时'
+      }
+      console.log('浏览器原生定位失败:', errorMessages[error.code] || error.message)
+      showToast(errorMessages[error.code] || '获取位置失败，请检查定位服务')
+      resolve()
+    },
+    options
+  )
+}
+
+const handleLocationSuccess = (lng: number, lat: number, accuracy: number) => {
+  if (!map.value) return
+  
+  map.value.setCenter([lng, lat])
+  
+  if (accuracy > 0 && accuracy <= 100) {
+    map.value.setZoom(18)
+  } else if (accuracy > 100 && accuracy <= 500) {
+    map.value.setZoom(16)
+  } else {
+    map.value.setZoom(15)
+  }
+  
+  const marker = new AMap.Marker({
+    position: [lng, lat],
+    title: `我的位置 (精度: ${accuracy > 0 ? accuracy + 'm' : '未知'})`,
+    icon: new AMap.Icon({
+      size: new AMap.Size(32, 32),
+      image: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%236366f1"%3E%3Cpath d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/%3E%3C/svg%3E',
+    }),
+  })
+  map.value.add(marker)
+  
+  if (accuracy > 0 && accuracy <= 1000) {
+    const circle = new AMap.Circle({
+      center: [lng, lat],
+      radius: accuracy,
+      strokeColor: '#6366f1',
+      strokeOpacity: 0.8,
+      strokeWeight: 2,
+      fillColor: '#6366f1',
+      fillOpacity: 0.1
+    })
+    map.value.add(circle)
+  }
 }
 
 const handleLocate = async () => {
