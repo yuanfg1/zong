@@ -2,6 +2,8 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { supabase } from '../supabase'
 
+declare const AMap: any
+
 const emit = defineEmits<{
   back: []
   goProfile: []
