@@ -691,7 +691,7 @@ const drawRelationLines = async () => {
     
     if (error || !markers || markers.length < 2) return
     
-    const parentChildrenMap: Record<string, { parent: MarkerData; children: MarkerData[] }> = {}
+    const parentChildrenMap: Record<string, { parent: any; children: any[] }> = {}
     
     for (let i = 0; i < markers.length; i++) {
       for (let j = i + 1; j < markers.length; j++) {
