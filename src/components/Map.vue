@@ -299,28 +299,31 @@ const submitMarker = async () => {
 
     const AMap = (window as Window).AMap
     if (AMap && currentMarkerPosition.value) {
+      const markerData = {
+        id: data.id,
+        name: markerForm.value.name.trim(),
+        phone: markerForm.value.phone || null,
+        description: markerForm.value.description || null,
+        location,
+        lng: Number(lng),
+        lat: Number(lat),
+        created_by: user.value?.id || null
+      }
+
       const marker = new AMap.Marker({
         position: new AMap.LngLat(currentMarkerPosition.value[0], currentMarkerPosition.value[1]),
-        title: markerForm.value.name
-      })
-
-      const infoWindow = new AMap.InfoWindow({
-        content: `
-          <div style="padding: 12px;">
-            <h4 style="margin: 0 0 8px 0; color: #1e293b;">${markerForm.value.name}</h4>
-            ${markerForm.value.phone ? `<p style="margin: 4px 0; color: #64748b;">📞 ${markerForm.value.phone}</p>` : ''}
-            ${markerForm.value.description ? `<p style="margin: 4px 0; color: #64748b;">${markerForm.value.description}</p>` : ''}
-          </div>
-        `,
-        offset: new AMap.Pixel(0, -20)
+        title: markerForm.value.name,
+        extData: markerData
       })
 
       marker.on('click', () => {
-        infoWindow.open(map.value, marker.getPosition())
+        showMarkerDetail.value = markerData
+        updateNodePath(markerData.name)
+        showDetailModal.value = true
       })
 
       map.value.add(marker)
-      markers.value.push({ marker, infoWindow, data: { ...markerForm.value, id: data.id } })
+      markers.value.push({ marker, data: markerData })
     }
 
     closeMarkerModal()
@@ -461,18 +464,130 @@ const loadMindmapData = async () => {
   }
 }
 
+const searchResults = ref<any[]>([])
+const editSearchResults = ref<any[]>([])
+const showSearchDropdown = ref(false)
+const showEditSearchDropdown = ref(false)
+
+interface SearchResult {
+  name: string
+  fullPath: string
+}
+
+const swapNameOrder = (name: string): string => {
+  const parts = name.split(' ')
+  if (parts.length === 2) {
+    return `${parts[1]} ${parts[0]}`
+  }
+  return name
+}
+
+const getAllNodesWithPath = (node: any, parentPath: string = '', depth: number = 0): SearchResult[] => {
+  const swappedName = swapNameOrder(node.text)
+  const currentPath = parentPath ? `${swappedName} → ${parentPath}` : swappedName
+  const results: SearchResult[] = [{ name: node.text, fullPath: currentPath }]
+  
+  node.children.forEach((child: any) => {
+    const pathParts = currentPath.split(' → ')
+    if (pathParts.length >= 4) {
+      const recentPath = pathParts.slice(0, 3).join(' → ')
+      results.push(...getAllNodesWithPath(child, recentPath, depth + 1))
+    } else {
+      results.push(...getAllNodesWithPath(child, currentPath, depth + 1))
+    }
+  })
+  
+  return results
+}
+
+const handleNodeSearch = () => {
+  if (!markerForm.value.name.trim()) {
+    searchResults.value = []
+    showSearchDropdown.value = false
+    return
+  }
+  
+  if (!mindmapData.value) {
+    searchResults.value = []
+    return
+  }
+  
+  const allNodes = getAllNodesWithPath(mindmapData.value)
+  const query = markerForm.value.name.toLowerCase()
+  
+  searchResults.value = allNodes.filter(node => 
+    node.name.toLowerCase().includes(query)
+  ).sort((a, b) => {
+    const aIndex = a.name.toLowerCase().indexOf(query)
+    const bIndex = b.name.toLowerCase().indexOf(query)
+    return aIndex - bIndex
+  }).slice(0, 10)
+  
+  showSearchDropdown.value = searchResults.value.length > 0
+}
+
+const handleEditNodeSearch = () => {
+  if (!editForm.value.name.trim()) {
+    editSearchResults.value = []
+    showEditSearchDropdown.value = false
+    return
+  }
+  
+  if (!mindmapData.value) {
+    editSearchResults.value = []
+    return
+  }
+  
+  const allNodes = getAllNodesWithPath(mindmapData.value)
+  const query = editForm.value.name.toLowerCase()
+  
+  editSearchResults.value = allNodes.filter(node => 
+    node.name.toLowerCase().includes(query)
+  ).sort((a, b) => {
+    const aIndex = a.name.toLowerCase().indexOf(query)
+    const bIndex = b.name.toLowerCase().indexOf(query)
+    return aIndex - bIndex
+  }).slice(0, 10)
+  
+  showEditSearchDropdown.value = editSearchResults.value.length > 0
+}
+
+const selectNodeName = (node: SearchResult) => {
+  markerForm.value.name = node.name
+  searchResults.value = []
+  showSearchDropdown.value = false
+}
+
+const selectEditNodeName = (node: SearchResult) => {
+  editForm.value.name = node.name
+  editSearchResults.value = []
+  showEditSearchDropdown.value = false
+}
+
+const closeSearchDropdown = () => {
+  setTimeout(() => {
+    showSearchDropdown.value = false
+  }, 200)
+}
+
+const closeEditSearchDropdown = () => {
+  setTimeout(() => {
+    showEditSearchDropdown.value = false
+  }, 200)
+}
+
 const findNodePath = (name: string): string[] => {
   if (!mindmapData.value) return []
   
   const path: string[] = []
   const findPath = (node: any, targetName: string): boolean => {
     if (node.text === targetName) {
-      path.unshift(node.text)
+      path.unshift(swapNameOrder(node.text))
       return true
     }
     for (const child of node.children) {
       if (findPath(child, targetName)) {
-        path.unshift(node.text)
+        path.unshift(swapNameOrder(node.text))
         return true
       }
     }
@@ -484,13 +599,325 @@ const findNodePath = (name: string): string[] => {
 }
 
 const markerNodePath = ref<string[]>([])
+const showRelationModal = ref(false)
+const markerRelations = ref<any[]>([])
+const relationLines = ref<any[]>([])
+let lineLayer: any = null
 
 const updateNodePath = (name: string) => {
   markerNodePath.value = findNodePath(name)
 }
 
+const findMarkerRelations = async () => {
+  if (!showMarkerDetail.value || !mindmapData.value) {
+    markerRelations.value = []
+    return
+  }
+  
+  const currentName = showMarkerDetail.value.name
+  const currentPath = findNodePath(currentName)
+  
+  if (!currentPath || currentPath.length === 0) {
+    markerRelations.value = []
+    return
+  }
+  
+  try {
+    const { data: markers, error } = await supabase.from('markers').select('*')
+    
+    if (error || !markers) {
+      markerRelations.value = []
+      return
+    }
+    
+    const relations = []
+    
+    for (const marker of markers) {
+      if (!marker.name || marker.name === currentName) continue
+      
+      const markerPath = findNodePath(marker.name)
+      if (!markerPath || markerPath.length === 0) continue
+      
+      let commonDepth = 0
+      const minLength = Math.min(currentPath.length, markerPath.length)
+      
+      while (commonDepth < minLength && currentPath[commonDepth] === markerPath[commonDepth]) {
+        commonDepth++
+      }
+      
+      if (commonDepth > 0) {
+        const relationType = commonDepth === currentPath.length 
+          ? '子辈' 
+          : commonDepth === markerPath.length 
+            ? '父辈' 
+            : '同辈'
+            
+        relations.push({
+          name: marker.name,
+          phone: marker.phone || '未填写',
+          relation: relationType,
+          commonAncestor: currentPath[commonDepth - 1],
+          sharedGenerations: commonDepth,
+          lng: marker.lng,
+          lat: marker.lat
+        })
+      }
+    }
+    
+    markerRelations.value = relations.sort((a, b) => b.sharedGenerations - a.sharedGenerations)
+  } catch (e) {
+    console.error('查找关系失败:', e)
+    markerRelations.value = []
+  }
+}
+
+const openRelationModal = async () => {
+  showDetailModal.value = false
+  await drawRelationLines()
+}
+
+const closeRelationModal = () => {
+  showRelationModal.value = false
+}
+
+const drawRelationLines = async () => {
+  const AMap = (window as Window).AMap
+  if (!AMap || !map.value) return
+  
+  clearRelationLines()
+  
+  try {
+    const { data: markers, error } = await supabase.from('markers').select('*')
+    
+    if (error || !markers || markers.length < 2) return
+    
+    const parentChildrenMap: Record<string, any[]> = {}
+    
+    for (let i = 0; i < markers.length; i++) {
+      for (let j = i + 1; j < markers.length; j++) {
+        const marker1 = markers[i]
+        const marker2 = markers[j]
+        
+        if (!marker1.name || !marker2.name) continue
+        if (!marker1.lng || !marker1.lat || !marker2.lng || !marker2.lat) continue
+        
+        const path1 = findNodePath(marker1.name)
+        const path2 = findNodePath(marker2.name)
+        
+        if (!path1 || !path2 || path1.length === 0 || path2.length === 0) continue
+        
+        let commonDepth = 0
+        const minLength = Math.min(path1.length, path2.length)
+        
+        while (commonDepth < minLength && path1[commonDepth] === path2[commonDepth]) {
+          commonDepth++
+        }
+        
+        if (commonDepth > 0) {
+          const isMarker1DirectParent = commonDepth === path1.length && path2.length === path1.length + 1
+          const isMarker2DirectParent = commonDepth === path2.length && path1.length === path2.length + 1
+          
+          if (isMarker1DirectParent) {
+            const parentKey = `${marker1.lng},${marker1.lat}`
+            if (!parentChildrenMap[parentKey]) {
+              parentChildrenMap[parentKey] = { parent: marker1, children: [] }
+            }
+            parentChildrenMap[parentKey].children.push(marker2)
+          } else if (isMarker2DirectParent) {
+            const parentKey = `${marker2.lng},${marker2.lat}`
+            if (!parentChildrenMap[parentKey]) {
+              parentChildrenMap[parentKey] = { parent: marker2, children: [] }
+            }
+            parentChildrenMap[parentKey].children.push(marker1)
+          }
+        }
+      }
+    }
+    
+    if (Object.keys(parentChildrenMap).length === 0) {
+      showToast('没有找到有族谱关系的标点')
+      return
+    }
+    
+    const polylineOptions = {
+      strokeColor: '#6366f1',
+      strokeWeight: 3,
+      strokeOpacity: 0.7,
+      strokeStyle: 'solid',
+      lineJoin: 'round'
+    }
+    
+    lineLayer = []
+    const arrowMarkers: any[] = []
+    const textLabels: any[] = []
+    const displayedNames = new Set<string>()
+    
+    const createTextLabel = (marker: any) => {
+      if (displayedNames.has(marker.name)) return
+      displayedNames.add(marker.name)
+      
+      const text = new AMap.Text({
+        text: marker.name,
+        position: new AMap.LngLat(marker.lng, marker.lat),
+        offset: new AMap.Pixel(0, -35),
+        style: {
+          fontSize: '14px',
+          fontWeight: 'bold',
+          color: '#6366f1',
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          border: '1px solid #6366f1',
+          whiteSpace: 'nowrap'
+        },
+        zIndex: 101
+      })
+      
+      map.value.add(text)
+      textLabels.push(text)
+    }
+    
+    Object.values(parentChildrenMap).forEach((group: any) => {
+      const parent = group.parent
+      const children = group.children
+      
+      createTextLabel(parent)
+      children.forEach(createTextLabel)
+      
+      if (children.length === 1) {
+        const child = children[0]
+        const polyline = new AMap.Polyline({
+          path: [
+            new AMap.LngLat(parent.lng, parent.lat),
+            new AMap.LngLat(child.lng, child.lat)
+          ],
+          ...polylineOptions
+        })
+        map.value.add(polyline)
+        lineLayer.push(polyline)
+        
+        addDynamicArrow(parent.lng, parent.lat, child.lng, child.lat, arrowMarkers)
+      } else {
+        const parentPoint = new AMap.LngLat(parent.lng, parent.lat)
+        const childPoints = children.map((c: any) => new AMap.LngLat(c.lng, c.lat))
+        
+        let centerLng = 0, centerLat = 0
+        childPoints.forEach((p: any) => {
+          centerLng += p.lng
+          centerLat += p.lat
+        })
+        centerLng /= childPoints.length
+        centerLat /= childPoints.length
+        
+        const offset = 0.0005
+        const direction = centerLat > parent.lat ? 1 : -1
+        const branchPoint = new AMap.LngLat(
+          parent.lng + (centerLng - parent.lng) * 0.3,
+          parent.lat + (centerLat - parent.lat) * 0.3 + direction * offset
+        )
+        
+        const mainLine = new AMap.Polyline({
+          path: [parentPoint, branchPoint],
+          ...polylineOptions
+        })
+        map.value.add(mainLine)
+        lineLayer.push(mainLine)
+        
+        addDynamicArrow(parent.lng, parent.lat, branchPoint.lng, branchPoint.lat, arrowMarkers)
+        
+        children.forEach((child: any) => {
+          const childPoint = new AMap.LngLat(child.lng, child.lat)
+          const branchLine = new AMap.Polyline({
+            path: [branchPoint, childPoint],
+            ...polylineOptions
+          })
+          map.value.add(branchLine)
+          lineLayer.push(branchLine)
+          
+          addDynamicArrow(branchPoint.lng, branchPoint.lat, child.lng, child.lat, arrowMarkers)
+        })
+      }
+    })
+    
+    if (arrowMarkers.length > 0) {
+      lineLayer.push(...arrowMarkers)
+    }
+    if (textLabels.length > 0) {
+      lineLayer.push(...textLabels)
+    }
+    
+    showToast(`已在地图上绘制关系线`)
+  } catch (e) {
+    console.error('绘制关系线失败:', e)
+    showToast('绘制关系线失败，请重试')
+  }
+}
+
+const addDynamicArrow = (fromLng: number, fromLat: number, toLng: number, toLat: number, arrowMarkers: any[]) => {
+  const AMap = (window as Window).AMap
+  if (!AMap || !map.value) return
+  
+  const arrowMarker = new AMap.Marker({
+    position: new AMap.LngLat(fromLng, fromLat),
+    icon: new AMap.Icon({
+      size: new AMap.Size(12, 12),
+      image: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236366f1'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3C/svg%3E`,
+      imageSize: new AMap.Size(12, 12)
+    }),
+    offset: new AMap.Pixel(-6, -6),
+    zIndex: 100
+  })
+  
+  map.value.add(arrowMarker)
+  arrowMarkers.push(arrowMarker)
+  
+  const duration = 2000
+  const startTime = Date.now()
+  
+  const animate = () => {
+    const elapsed = Date.now() - startTime
+    const progress = (elapsed % duration) / duration
+    
+    const currentLng = fromLng + (toLng - fromLng) * progress
+    const currentLat = fromLat + (toLat - fromLat) * progress
+    
+    arrowMarker.setPosition(new AMap.LngLat(currentLng, currentLat))
+    
+    requestAnimationFrame(animate)
+  }
+  
+  animate()
+}
+
+const clearRelationLines = () => {
+  if (lineLayer && lineLayer.length > 0 && map.value) {
+    lineLayer.forEach(line => {
+      map.value.remove(line)
+    })
+    lineLayer = null
+  }
+  relationLines.value = []
+}
+
+const toggleRelationLines = async () => {
+  if (lineLayer && lineLayer.length > 0) {
+    clearRelationLines()
+    showToast('已隐藏关系线')
+  } else {
+    await drawRelationLines()
+  }
+}
+
 const goBack = () => {
   emit('back')
+}
+
+const toastMessage = ref('')
+const showToast = (message: string) => {
+  toastMessage.value = message
+  setTimeout(() => {
+    toastMessage.value = ''
+  }, 2000)
 }
 
 onMounted(() => {
@@ -546,6 +973,9 @@ onUnmounted(() => {
       <button class="control-btn satellite-btn" :class="{ active: isSatelliteMode }" @click="toggleSatelliteMode">
         {{ isSatelliteMode ? '✓ 卫星图' : '🛰️ 卫星图' }}
       </button>
+      <button class="control-btn relation-btn" :class="{ active: lineLayer }" @click="toggleRelationLines">
+        {{ lineLayer ? '✓ 关系线' : '🔗 关系线' }}
+      </button>
     </div>
 
     <div v-if="showMarkerModal" class="modal-overlay" @click.self="closeMarkerModal">
@@ -553,7 +983,29 @@ onUnmounted(() => {
         <h3>添加标记点</h3>
         <div class="form-group">
           <label>姓名 <span class="required">*</span></label>
-          <input v-model="markerForm.name" type="text" placeholder="请输入姓名" />
+          <div class="search-select-wrapper">
+            <input 
+              v-model="markerForm.name" 
+              type="text" 
+              placeholder="输入姓名搜索或直接输入..." 
+              @input="handleNodeSearch"
+              @focus="handleNodeSearch"
+              ref="nameInput"
+            />
+            <div v-if="showSearchDropdown && searchResults.length > 0" class="search-dropdown">
+              <div class="dropdown-header">从思维导图选择：</div>
+              <div 
+                v-for="(node, index) in searchResults" 
+                :key="index"
+                class="dropdown-item"
+                @click="selectNodeName(node)"
+                @mousedown.prevent
+              >
+                <div class="dropdown-item-name">{{ node.name }}</div>
+                <div class="dropdown-item-path">{{ node.fullPath }}</div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="form-group">
           <label>手机号</label>
@@ -612,7 +1064,50 @@ onUnmounted(() => {
           >
             删除
           </button>
+          <button 
+            class="btn btn-relation" 
+            @click="openRelationModal"
+          >
+            关系
+          </button>
           <button class="btn btn-cancel" @click="showDetailModal = false">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showRelationModal" class="modal-overlay" @click.self="closeRelationModal">
+      <div class="modal-content relation-modal">
+        <h3>标点关系</h3>
+        <div class="form-group">
+          <label>当前标点</label>
+          <div class="detail-value">{{ showMarkerDetail?.name }}</div>
+        </div>
+        <div class="form-group">
+          <label>相关标点</label>
+          <div v-if="markerRelations.length > 0" class="relations-list">
+            <div 
+              v-for="(relation, index) in markerRelations" 
+              :key="index"
+              class="relation-item"
+            >
+              <div class="relation-name">{{ relation.name }}</div>
+              <div class="relation-info">
+                <span class="relation-tag" :class="relation.relation">
+                  {{ relation.relation }}
+                </span>
+                <span class="relation-phone">{{ relation.phone }}</span>
+              </div>
+              <div class="relation-ancestor">
+                共同祖先: {{ relation.commonAncestor }}
+              </div>
+            </div>
+          </div>
+          <div v-else class="no-data">
+            未找到相关标点
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-cancel" @click="closeRelationModal">关闭</button>
         </div>
       </div>
     </div>
@@ -622,7 +1117,28 @@ onUnmounted(() => {
         <h3>修改标点</h3>
         <div class="form-group">
           <label>姓名 <span class="required">*</span></label>
-          <input v-model="editForm.name" type="text" placeholder="请输入姓名" />
+          <div class="search-select-wrapper">
+            <input 
+              v-model="editForm.name" 
+              type="text" 
+              placeholder="输入姓名搜索或直接输入..." 
+              @input="handleEditNodeSearch"
+              @focus="handleEditNodeSearch"
+            />
+            <div v-if="showEditSearchDropdown && editSearchResults.length > 0" class="search-dropdown">
+              <div class="dropdown-header">从思维导图选择：</div>
+              <div 
+                v-for="(node, index) in editSearchResults" 
+                :key="index"
+                class="dropdown-item"
+                @click="selectEditNodeName(node)"
+                @mousedown.prevent
+              >
+                <div class="dropdown-item-name">{{ node.name }}</div>
+                <div class="dropdown-item-path">{{ node.fullPath }}</div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="form-group">
           <label>手机号</label>
@@ -637,6 +1153,10 @@ onUnmounted(() => {
           <button class="btn btn-submit" @click="submitEditMarker">确定</button>
         </div>
       </div>
+    </div>
+
+    <div v-if="toastMessage" class="toast-notification">
+      {{ toastMessage }}
     </div>
   </div>
 </template>
@@ -1000,5 +1520,194 @@ onUnmounted(() => {
 .no-data {
   color: #94a3b8;
   font-style: italic;
+}
+
+.search-select-wrapper {
+  position: relative;
+  z-index: 10;
+}
+
+.search-select-wrapper input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.3s;
+  box-sizing: border-box;
+  background: #f8fafc;
+}
+
+.search-select-wrapper input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  background: white;
+}
+
+.search-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+}
+
+.dropdown-header {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: #94a3b8;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dropdown-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dropdown-item:hover {
+  background: #f1f5f9;
+}
+
+.dropdown-item-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.dropdown-item-path {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.relation-modal {
+  max-width: 500px;
+}
+
+.relations-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.relation-item {
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.relation-item:last-child {
+  margin-bottom: 0;
+}
+
+.relation-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.relation-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.relation-tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.relation-tag.父辈 {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.relation-tag.子辈 {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.relation-tag.同辈 {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.relation-phone {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.relation-ancestor {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.btn-relation {
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  border: none;
+  color: white;
+}
+
+.btn-relation:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.4);
+}
+
+.relation-btn {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  color: white;
+}
+
+.relation-btn:hover {
+  background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  color: white;
+}
+
+.relation-btn.active {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  color: white;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+}
+
+.toast-notification {
+  position: fixed;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 41, 59, 0.9);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 2000;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 </style>

@@ -482,10 +482,10 @@ const selectAndScrollToNode = (node: Node) => {
       const targetScrollTop = scaledNodeY - containerRect.height / 2 + MIN_NODE_HEIGHT.value * scale.value / 2
       
       containerEl.scrollTo({
-        left: Math.max(0, targetScrollLeft),
-        top: Math.max(0, targetScrollTop),
-        behavior: 'smooth'
-      })
+    left: targetScrollLeft,
+    top: targetScrollTop,
+    behavior: 'smooth'
+  })
     }
   })
 }
@@ -708,10 +708,10 @@ const updateLayout = () => {
   const containerWidth = container.value?.clientWidth || 1200
   
   const treeWidth = getSubtreeWidth(root.value)
-  const startX = Math.max(containerWidth / 2, treeWidth / 2 + 50)
+  // 把树放在中间位置，左右都有足够空间
+  const startX = 40000
   
   layoutTree(root.value, startX, 60)
-  connections.value = generateConnections(root.value)
   
   const allNodes = getAllNodes(root.value)
   let maxX = 0
@@ -721,8 +721,11 @@ const updateLayout = () => {
     maxY = Math.max(maxY, node.y + MIN_NODE_HEIGHT.value)
   })
   
-  svgWidth.value = Math.max(maxX + 500, 80000)
-  svgHeight.value = Math.max(maxY + 500, 80000)
+  // 设置足够大的画布空间
+  svgWidth.value = 80000
+  svgHeight.value = 80000
+  
+  connections.value = generateConnections(root.value)
 }
 
 const handleMouseDown = (event: MouseEvent) => {
@@ -787,6 +790,7 @@ const handleWheel = (event: WheelEvent) => {
   
   const scaleDelta = newScale / targetScale.value
   
+  // 以鼠标为中心进行缩放
   const newScrollLeft = mouseX - (mouseX - containerEl.scrollLeft) * scaleDelta
   const newScrollTop = mouseY - (mouseY - containerEl.scrollTop) * scaleDelta
   
@@ -805,7 +809,9 @@ const resetView = () => {
     smoothScale()
   }
   if (container.value) {
-    container.value.scrollLeft = 0
+    // 重置时滚动到根节点附近
+    const containerWidth = container.value.clientWidth
+    container.value.scrollLeft = 40000 - containerWidth / 2
     container.value.scrollTop = 0
   }
 }
