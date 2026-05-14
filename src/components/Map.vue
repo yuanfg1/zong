@@ -95,19 +95,35 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
   return new Promise<void>((resolve) => {
     const geolocation = new AMap.Geolocation({
       enableHighAccuracy: true,
-      timeout: 10000,
+      timeout: 15000,
+      maximumAge: 0,
+      convert: true,
+      showButton: false,
+      showMarker: false,
+      showCircle: true,
+      panToLocation: false,
+      zoomToAccuracy: false
     })
 
     geolocation.getCurrentPosition((status: string, result: any) => {
       if (status === 'complete') {
         const { lng, lat } = result.position
+        const accuracy = result.accuracy || 0
+        
         map.value.setCenter([lng, lat])
-        map.value.setZoom(15)
+        
+        if (accuracy > 0 && accuracy <= 100) {
+          map.value.setZoom(18)
+        } else if (accuracy > 100 && accuracy <= 500) {
+          map.value.setZoom(16)
+        } else {
+          map.value.setZoom(15)
+        }
         
         if (showMarker) {
           const marker = new AMap.Marker({
             position: [lng, lat],
-            title: '我的位置',
+            title: `我的位置 (精度: ${accuracy > 0 ? accuracy + 'm' : '未知'})`,
             icon: new AMap.Icon({
               size: new AMap.Size(32, 32),
               image: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%236366f1"%3E%3Cpath d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/%3E%3C/svg%3E',
@@ -115,9 +131,22 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
           })
           map.value.add(marker)
         }
+        
+        if (accuracy > 0 && accuracy <= 1000) {
+          const circle = new AMap.Circle({
+            center: [lng, lat],
+            radius: accuracy,
+            strokeColor: '#6366f1',
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: '#6366f1',
+            fillOpacity: 0.1
+          })
+          map.value.add(circle)
+        }
       } else {
         console.log('获取位置失败，使用默认位置:', result.message)
-        alert('获取位置失败，请确保已授权位置权限')
+        showToast('获取位置失败，请确保已授权位置权限')
       }
       resolve()
     })
@@ -127,7 +156,7 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
 const handleLocate = async () => {
   const AMap = (window as Window).AMap
   if (!AMap) {
-    alert('地图加载中，请稍候')
+    showToast('地图加载中，请稍候')
     return
   }
   await getCurrentLocation(AMap, true)
@@ -204,7 +233,7 @@ const toggleSatelliteMode = () => {
 
 const handleSearch = async () => {
   if (!searchQuery.value.trim() || !map.value) {
-    alert('请输入搜索地点')
+    showToast('请输入搜索地点')
     return
   }
 
@@ -234,15 +263,15 @@ const handleSearch = async () => {
         })
         map.value.add(marker)
         
-        alert(`已定位到: ${result.geocodes[0].formattedAddress}`)
+        showToast(`已定位到: ${result.geocodes[0].formattedAddress}`)
       } else {
         console.error('搜索结果:', result)
-        alert('未找到该地点，请尝试其他关键词')
+        showToast('未找到该地点，请尝试其他关键词')
       }
     })
   } catch (error) {
     console.error('搜索失败:', error)
-    alert(`搜索失败: ${error}`)
+    showToast(`搜索失败: ${error}`)
   }
 }
 
@@ -258,7 +287,7 @@ const closeMarkerModal = () => {
 
 const submitMarker = async () => {
   if (!markerForm.value.name.trim()) {
-    alert('姓名为必填项')
+    showToast('姓名为必填项')
     return
   }
 
@@ -293,7 +322,7 @@ const submitMarker = async () => {
 
     if (error) {
       console.error('保存标点失败:', error)
-      alert(`保存失败: ${error.message || error}`)
+      showToast(`保存失败: ${error.message || error}`)
       return
     }
 
@@ -327,10 +356,10 @@ const submitMarker = async () => {
     }
 
     closeMarkerModal()
-    alert('标点成功！')
+    showToast('标点成功！')
   } catch (e) {
     console.error('保存标点异常:', e)
-    alert('保存失败')
+    showToast('保存失败')
   }
 }
 
@@ -359,7 +388,7 @@ const closeEditModal = () => {
 
 const deleteMarker = async () => {
   if (!showMarkerDetail.value || !showMarkerDetail.value.id) {
-    alert('无法删除此标点')
+    showToast('无法删除此标点')
     return
   }
 
@@ -375,23 +404,23 @@ const deleteMarker = async () => {
 
     if (error) {
       console.error('删除标点失败:', error)
-      alert(`删除失败: ${error.message || error}`)
+      showToast(`删除失败: ${error.message || error}`)
       return
     }
 
     showDetailModal.value = false
-    alert('删除成功！')
+    showToast('删除成功！')
     
     location.reload()
   } catch (error) {
     console.error('删除标点时发生错误:', error)
-    alert('删除失败')
+    showToast('删除失败')
   }
 }
 
 const submitEditMarker = async () => {
   if (!editForm.value.name.trim()) {
-    alert('姓名为必填项')
+    showToast('姓名为必填项')
     return
   }
 
@@ -409,17 +438,17 @@ const submitEditMarker = async () => {
 
     if (error) {
       console.error('修改标点失败:', error)
-      alert(`修改失败: ${error.message || error}`)
+      showToast(`修改失败: ${error.message || error}`)
       return
     }
 
     closeEditModal()
-    alert('修改成功！')
+    showToast('修改成功！')
     
     location.reload()
   } catch (e) {
     console.error('修改标点异常:', e)
-    alert('修改失败')
+    showToast('修改失败')
   }
 }
 
