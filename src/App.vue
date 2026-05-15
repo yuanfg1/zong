@@ -5,17 +5,26 @@ import AuthForm from './components/AuthForm.vue'
 import Profile from './components/Profile.vue'
 import Map from './components/Map.vue'
 import { supabase } from './supabase'
+import { useMindMapStore } from './stores/mindmap'
+import { useMapStore } from './stores/map'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
+
+const mindMapStore = useMindMapStore()
+const mapStore = useMapStore()
 
 const user = ref<any>(null)
 const loading = ref(true)
 const currentPage = ref<'mindmap' | 'profile' | 'map'>('map')
 
-const handleAuthStateChange = (event: AuthChangeEvent, session: Session | null) => {
+const handleAuthStateChange = async (event: AuthChangeEvent, session: Session | null) => {
   if (session) {
     user.value = session.user
+    await mindMapStore.loadFromDatabase()
+    await mapStore.loadMarkersFromDB()
   } else {
     user.value = null
+    mindMapStore.resetLoaded()
+    mapStore.resetLoaded()
   }
   loading.value = false
 }
@@ -62,13 +71,18 @@ watch(currentPage, (newPage) => {
 
 let authSubscription: { unsubscribe: () => void } | null = null
 
-onMounted(() => {
+onMounted(async () => {
   loadPageFromUrl()
   
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    user.value = session?.user || null
-    loading.value = false
-  })
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session) {
+    user.value = session.user
+    await mindMapStore.loadFromDatabase()
+    await mapStore.loadMarkersFromDB()
+  } else {
+    user.value = null
+  }
+  loading.value = false
   
   authSubscription = supabase.auth.onAuthStateChange(handleAuthStateChange).data.subscription
 })

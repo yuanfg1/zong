@@ -61,6 +61,7 @@ const filteredUsers = computed(() => {
 onMounted(async () => {
   const { data: { user: currentUser } } = await supabase.auth.getUser()
   if (currentUser) {
+    user.value = currentUser
     const phone = currentUser.email?.replace('@example.com', '')
     
     if (phone === adminPhone) {
@@ -138,9 +139,37 @@ const loadAllUsers = async () => {
 const saveName = async () => {
   try {
     console.log('保存姓名:', { userId: user.value.id, name: userName.value })
+    
+    const { data: existingUser, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', user.value.id)
+      .single()
+    
+    if (userError && userError.code === 'PGRST116') {
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert({
+          id: user.value.id,
+          phone: user.value.email?.replace('@example.com', '') || '',
+          email: user.value.email || '',
+          password_hash: ''
+        })
+      
+      if (insertError) {
+        console.error('创建用户记录失败:', insertError)
+        nameError.value = insertError.message
+        return
+      }
+    } else if (userError) {
+      console.error('检查用户记录失败:', userError)
+      nameError.value = userError.message
+      return
+    }
+    
     const { error } = await supabase
       .from('user_profiles')
-      .upsert({ user_id: user.value.id, name: userName.value.trim() })
+      .upsert({ id: user.value.id, name: userName.value.trim() })
     
     if (error) {
       console.error('保存姓名失败:', error)
@@ -212,6 +241,11 @@ const loadMarkers = async () => {
   } catch (error) {
     console.error('加载标点时发生错误:', error)
   }
+}
+
+const getCreatorName = (creatorId: string) => {
+  const creator = allUsers.value.find(u => u.id === creatorId)
+  return creator?.profileName || creator?.phone || creatorId.substring(0, 8) + '...'
 }
 
 const startEditMarker = (marker: any) => {
@@ -547,7 +581,7 @@ const updateUserRole = async (userId: string, isAdmin: boolean) => {
                     <span class="coord-tag">📍 {{ marker.lat?.toFixed(4) }}, {{ marker.lng?.toFixed(4) }}</span>
                   </div>
                   <p class="marker-creator" v-if="marker.created_by">
-                    创建者ID: {{ marker.created_by.substring(0, 8) }}...
+                    创建者: {{ getCreatorName(marker.created_by) }}
                   </p>
                 </div>
                 <div class="marker-actions">

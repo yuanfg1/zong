@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { supabase } from '../supabase'
+import { useMapStore } from '../stores/map'
+import { useMindMapStore } from '../stores/mindmap'
 
 declare const AMap: any
 
@@ -8,6 +10,9 @@ const emit = defineEmits<{
   back: []
   goProfile: []
 }>()
+
+const mapStore = useMapStore()
+const mindMapStore = useMindMapStore()
 
 const mapContainer = ref<HTMLElement | null>(null)
 const mapLoaded = ref(false)
@@ -21,7 +26,6 @@ const markerForm = ref({
   description: ''
 })
 const currentMarkerPosition = ref<[number, number] | null>(null)
-const markers = ref<any[]>([])
 const isMarkerMode = ref(false)
 
 const showMarkerDetail = ref<any>(null)
@@ -126,19 +130,14 @@ const initMap = async () => {
 
 const loadMarkersFromDB = async (AMap: any) => {
   try {
-    const { data, error } = await supabase.from('markers').select('*')
+    const markers = await mapStore.loadMarkersFromDB()
     
-    if (error) {
-      console.error('加载标点失败:', error)
-      return
-    }
-
-    if (!data || data.length === 0) {
+    if (!markers || markers.length === 0) {
       console.log('数据库中没有标点')
       return
     }
 
-    data.forEach((markerData: any) => {
+    markers.forEach((markerData: any) => {
       if (!markerData.lng || !markerData.lat) return
 
       const lng = parseFloat(markerData.lng)
@@ -177,7 +176,7 @@ const loadMarkersFromDB = async (AMap: any) => {
       map.value.add(text)
     })
 
-    console.log(`已加载 ${data.length} 个标点`)
+    console.log(`已加载 ${markers.length} 个标点`)
   } catch (error) {
     console.error('加载标点时发生错误:', error)
   }
@@ -321,7 +320,7 @@ const submitMarker = async () => {
 
       map.value.add(marker)
       map.value.add(text)
-      markers.value.push({ marker, data: markerData })
+      mapStore.addMarker(markerData)
     }
 
     closeMarkerModal()
@@ -441,25 +440,8 @@ const getLocationName = async (lng: number, lat: number): Promise<string> => {
 
 const mindmapData = ref<any>(null)
 
-const loadMindmapData = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('mindmaps')
-      .select('data')
-      .eq('id', '组织结构图')
-      .single()
-    
-    if (error || !data) {
-      console.log('数据库中没有思维导图数据')
-      return
-    }
-    
-    if (data.data) {
-      mindmapData.value = JSON.parse(data.data)
-    }
-  } catch (e: any) {
-    console.error('加载思维导图数据失败:', e)
-  }
+const loadMindmapData = () => {
+  mindmapData.value = mindMapStore.root
 }
 
 const searchResults = ref<any[]>([])
@@ -609,7 +591,7 @@ const updateNodePath = (name: string) => {
   markerNodePath.value = findNodePath(name)
 }
 
-const findMarkerRelations = async () => {
+const findMarkerRelations = () => {
   if (!showMarkerDetail.value || !mindmapData.value) {
     markerRelations.value = []
     return
@@ -623,13 +605,12 @@ const findMarkerRelations = async () => {
     return
   }
   
-  try {
-    const { data: markers, error } = await supabase.from('markers').select('*')
-    
-    if (error || !markers) {
-      markerRelations.value = []
-      return
-    }
+  const markers = mapStore.markers
+  
+  if (!markers) {
+    markerRelations.value = []
+    return
+  }
     
     const relations = []
     
@@ -666,10 +647,6 @@ const findMarkerRelations = async () => {
     }
     
     markerRelations.value = relations.sort((a, b) => b.sharedGenerations - a.sharedGenerations)
-  } catch (e) {
-    console.error('查找关系失败:', e)
-    markerRelations.value = []
-  }
 }
 
 const openRelationModal = async () => {
@@ -688,9 +665,9 @@ const drawRelationLines = async (generations: number = relationGenerations.value
   clearRelationLines()
   
   try {
-    const { data: markers, error } = await supabase.from('markers').select('*')
+    const markers = mapStore.markers
     
-    if (error || !markers || markers.length < 2) return
+    if (!markers || markers.length < 2) return
     
     const parentChildrenMap: Record<string, { parent: any; children: any[] }> = {}
     const relatedMarkers = new Set<string>()
@@ -784,6 +761,7 @@ const drawRelationLines = async (generations: number = relationGenerations.value
           const marker1 = markers[i]
           const marker2 = markers[j]
           
+          if (!marker1 || !marker2) continue
           if (!marker1.name || !marker2.name) continue
           if (!marker1.lng || !marker1.lat || !marker2.lng || !marker2.lat) continue
           
@@ -996,15 +974,8 @@ const clearRelationLines = () => {
   relationLines.value = []
 }
 
-const loadMarkersForSelect = async () => {
-  try {
-    const { data: markers, error } = await supabase.from('markers').select('*')
-    if (!error && markers) {
-      allMarkersForSelect.value = markers.filter((m: any) => m.name)
-    }
-  } catch (e) {
-    console.error('加载标点列表失败:', e)
-  }
+const loadMarkersForSelect = () => {
+  allMarkersForSelect.value = mapStore.markers.filter((m: any) => m.name)
 }
 
 const toggleRelationLines = async () => {
@@ -1012,7 +983,7 @@ const toggleRelationLines = async () => {
     clearRelationLines()
     showToast('已隐藏关系线')
   } else {
-    await loadMarkersForSelect()
+    loadMarkersForSelect()
     await drawRelationLines()
   }
 }

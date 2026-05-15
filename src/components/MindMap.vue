@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, nextTick, onUnmounted, watch } from 'vue'
 import { supabase } from '../supabase'
+import { useMindMapStore } from '../stores/mindmap'
 import * as XLSX from 'xlsx'
 
 const props = defineProps<{
@@ -12,6 +13,8 @@ const emit = defineEmits<{
   goProfile: []
   goMap: []
 }>()
+
+const mindMapStore = useMindMapStore()
 
 interface Node {
   id: string
@@ -60,6 +63,20 @@ const handleAdminToggle = async () => {
   }
 }
 
+const root = ref<Node>({
+  id: 'root',
+  text: '新思维导图',
+  x: 0,
+  y: 0,
+  color: '#6366f1',
+  children: []
+})
+
+watch(() => mindMapStore.root, (newRoot) => {
+  Object.assign(root.value, newRoot)
+  updateLayout()
+}, { deep: true })
+
 onMounted(async () => {
   if (window.innerWidth <= 768) {
     showSidebar.value = false
@@ -82,7 +99,14 @@ onMounted(async () => {
     }
   }
   
-  await loadFromDatabase()
+  if (mindMapStore.isLoaded) {
+    Object.assign(root.value, mindMapStore.root)
+    updateLayout()
+  } else {
+    await mindMapStore.loadFromDatabase()
+    Object.assign(root.value, mindMapStore.root)
+    updateLayout()
+  }
 })
 
 const isDragging = ref(false)
@@ -127,15 +151,6 @@ const getRandomColor = (): string => {
   const color = colors[index]
   return color !== undefined ? color : defaultColor
 }
-
-const root = ref<Node>({
-  id: 'root',
-  text: '新思维导图',
-  x: 0,
-  y: 0,
-  color: getColor(0),
-  children: []
-})
 
 const NODE_PADDING = ref(4)
 const MIN_NODE_WIDTH = ref(50)
@@ -581,57 +596,23 @@ const handleDragEnd = () => {
   dragOverNode.value = null
 }
 
-const DEFAULT_MAP_NAME = '组织结构图'
-
 const saveToDatabase = async () => {
-  const mapName = DEFAULT_MAP_NAME
-  
   try {
-    const { data, error } = await supabase
-      .from('mindmaps')
-      .upsert({
-        id: mapName.toLowerCase().replace(/\s+/g, '-'),
-        data: JSON.stringify(root.value),
-        title: mapName,
-        user_id: props.user?.id,
-        updated_at: new Date().toISOString()
-      })
-    
-    if (error) {
-      console.error('保存失败:', error)
-      alert('保存失败: ' + error.message)
-    } else {
-      alert('保存成功！')
-    }
+    mindMapStore.updateRoot(root.value)
+    await mindMapStore.saveToDatabase(props.user?.id || '')
+    alert('保存成功！')
   } catch (e: any) {
     console.error('保存异常:', e)
     alert('保存异常: ' + (e.message || '未知错误'))
   }
 }
 
-const loadFromDatabase = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('mindmaps')
-      .select('id, title, data')
-      .eq('id', DEFAULT_MAP_NAME.toLowerCase().replace(/\s+/g, '-'))
-      .single()
-    
-    if (error || !data) {
-      console.log('数据库中没有思维导图，使用默认数据')
-      updateLayout()
-      return
-    }
-    
-    if (data && data.data) {
-      const loadedData = JSON.parse(data.data)
-      Object.assign(root.value, loadedData)
-    }
-    updateLayout()
-  } catch (e: any) {
-    console.error('加载异常:', e)
-    updateLayout()
-  }
+const refreshFromDatabase = async () => {
+  mindMapStore.resetLoaded()
+  await mindMapStore.loadFromDatabase()
+  Object.assign(root.value, mindMapStore.root)
+  updateLayout()
+  alert('数据已刷新！')
 }
 
 interface Connection {
@@ -866,12 +847,10 @@ const handleTouchEnd = (event: TouchEvent) => {
   }
 }
 
-onMounted(async () => {
+onMounted(() => {
   nextTick(() => {
     window.addEventListener('resize', updateLayout)
   })
-  
-  await loadFromDatabase()
 })
 
 onUnmounted(() => {
@@ -948,8 +927,8 @@ onUnmounted(() => {
       >
         保存
       </button>
-      <button class="btn btn-info" @click="loadFromDatabase">
-        加载
+      <button class="btn btn-info" @click="refreshFromDatabase">
+        刷新
       </button>
       <button 
         v-if="isAdmin" 
