@@ -320,6 +320,20 @@ const loadMarkersFromDB = async (AMap: any) => {
         extData: markerData
       })
 
+      // 添加名字标签
+      const text = new AMap.Text({
+        position: new AMap.LngLat(lng, lat),
+        text: markerData.name,
+        offset: new AMap.Pixel(0, -35),
+        fontSize: '12px',
+        fontWeight: 'bold',
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderColor: '#6366f1',
+        borderWidth: 1,
+        borderRadius: 4,
+        padding: '4px 8px'
+      })
+
       marker.on('click', () => {
         showMarkerDetail.value = markerData
         updateNodePath(markerData.name)
@@ -327,6 +341,7 @@ const loadMarkersFromDB = async (AMap: any) => {
       })
 
       map.value.add(marker)
+      map.value.add(text)
     })
 
     console.log(`已加载 ${data.length} 个标点`)
@@ -472,6 +487,20 @@ const submitMarker = async () => {
         extData: markerData
       })
 
+      // 添加名字标签
+      const text = new AMap.Text({
+        position: new AMap.LngLat(currentMarkerPosition.value[0], currentMarkerPosition.value[1]),
+        text: markerForm.value.name.trim(),
+        offset: new AMap.Pixel(0, -35),
+        fontSize: '12px',
+        fontWeight: 'bold',
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        borderColor: '#6366f1',
+        borderWidth: 1,
+        borderRadius: 4,
+        padding: '4px 8px'
+      })
+
       marker.on('click', () => {
         showMarkerDetail.value = markerData
         updateNodePath(markerData.name)
@@ -479,6 +508,7 @@ const submitMarker = async () => {
       })
 
       map.value.add(marker)
+      map.value.add(text)
       markers.value.push({ marker, data: markerData })
     }
 
