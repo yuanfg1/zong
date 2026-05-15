@@ -188,22 +188,23 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
           () => {
             resolve(null)
           },
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
         )
       })
     }
 
     const geolocation = new AMap.Geolocation({
       enableHighAccuracy: true,
-      timeout: 15000,
+      timeout: 5000,
       maximumAge: 0,
-      convert: true,
-      showButton: false,
-      showMarker: false,
+      noConvert: true,
+      showButton: true,
+      buttonPosition: 'RB',
+      showMarker: true,
       showCircle: true,
       panToLocation: true,
       zoomToAccuracy: true,
-      useNative: false
+      useNative: true
     })
 
     geolocation.getCurrentPosition(async (status: string, result: any) => {
@@ -217,14 +218,15 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
         const isIPLocation = locationType === 'ip' || locationType === 'IP'
         
         if (isIPLocation) {
-          console.log('检测到IP定位，拒绝使用')
+          console.log('检测到IP定位，精度较低')
           console.log('尝试浏览器原生定位...')
           
           const browserLoc = await tryBrowserLocation()
           if (browserLoc && browserLoc.accuracy <= 500) {
             showPosition(browserLoc.lng, browserLoc.lat, browserLoc.accuracy, '浏览器原生')
           } else {
-            showToast('当前为IP定位，精度较低。请开启GPS以获得更准确的位置')
+            console.log('浏览器定位也失败，尝试IP城市定位...')
+            tryIPCityLocation()
           }
           resolve()
           return
@@ -239,7 +241,7 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
           if (browserLoc && browserLoc.accuracy < accuracy) {
             showPosition(browserLoc.lng, browserLoc.lat, browserLoc.accuracy, '浏览器原生')
           } else {
-            showToast(`定位精度较低(${accuracy}米)，请开启GPS`)
+            showToast(`定位精度较低(${accuracy}米)，建议开启GPS以获得更准确的位置`)
           }
         }
         resolve()
@@ -251,11 +253,30 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
         if (browserLoc && browserLoc.accuracy <= 500) {
           showPosition(browserLoc.lng, browserLoc.lat, browserLoc.accuracy, '浏览器原生')
         } else {
-          showToast('获取位置失败，请确保已授权位置权限并开启GPS')
+          console.log('浏览器定位也失败，尝试IP城市定位...')
+          tryIPCityLocation()
         }
         resolve()
       }
     })
+
+    const tryIPCityLocation = () => {
+      const citySearch = new AMap.CitySearch()
+      citySearch.getLocalCity((status: string, result: any) => {
+        if (status === 'complete' && result && result.city) {
+          const cityCenter = result.rectangle.split(';')[0].split(',')
+          const cityLng = parseFloat(cityCenter[0])
+          const cityLat = parseFloat(cityCenter[1])
+          
+          if (!isNaN(cityLng) && !isNaN(cityLat)) {
+            showPosition(cityLng, cityLat, 5000, 'IP城市定位')
+            showToast(`已定位到${result.city}，精度约5公里。建议开启GPS以获得更准确的位置`)
+          }
+        } else {
+          showToast('获取位置失败，请确保已授权位置权限并开启GPS。如需精确定位，请在手机设置中开启定位服务')
+        }
+      })
+    }
   })
 }
 
