@@ -23,8 +23,6 @@ const markerForm = ref({
 const currentMarkerPosition = ref<[number, number] | null>(null)
 const markers = ref<any[]>([])
 const isMarkerMode = ref(false)
-const isSatelliteMode = ref(false)
-let satelliteLayer: any = null
 
 const showMarkerDetail = ref<any>(null)
 const showDetailModal = ref(false)
@@ -47,7 +45,7 @@ interface Window {
 const loadAMapScript = () => {
   return new Promise<void>((resolve, reject) => {
     const script = document.createElement('script')
-    script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMapKey}&callback=initAMap&plugin=AMap.Geolocation,AMap.Geocoder`
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMapKey}&callback=initAMap`
     script.onerror = () => reject(new Error('地图加载失败'))
     ;(window as Window).initAMap = resolve
     document.body.appendChild(script)
@@ -77,7 +75,38 @@ const initMap = async () => {
       mapStyle: 'amap://styles/normal',
     })
 
-    await getCurrentLocation(AMap, true)
+    await new Promise<void>((resolve) => {
+      AMap.plugin(['AMap.MapType', 'AMap.Geocoder', 'AMap.Geolocation'], () => {
+        try {
+          map.value.addControl(new AMap.MapType())
+          const geolocation = new AMap.Geolocation({
+            enableHighAccuracy: true,
+            timeout: 20000,
+            maximumAge: 0,
+            convert: false,
+            showButton: true,
+            position: 'top-left',
+            showMarker: true,
+            showCircle: true,
+            panToLocation: true,
+            zoomToAccuracy: true,
+            useNative: true,
+            accuracy: 'high'
+          })
+          map.value.addControl(geolocation)
+          geolocation.getCurrentPosition((status: string, result: any) => {
+            if (status === 'complete') {
+              console.log('自动定位成功:', result.position)
+            } else {
+              console.log('自动定位失败:', result)
+            }
+          })
+        } catch (e) {
+          console.error('添加控件失败:', e)
+        }
+        resolve()
+      })
+    })
 
     map.value.on('click', (e: any) => {
       if (!isMarkerMode.value) return
@@ -93,202 +122,6 @@ const initMap = async () => {
     console.error('地图加载失败:', error)
     mapLoaded.value = true
   }
-}
-
-const checkLocationPermission = async (): Promise<boolean> => {
-  if (!('permissions' in navigator)) {
-    return true
-  }
-  try {
-    const result = await navigator.permissions.query({ name: 'geolocation' })
-    if (result.state === 'granted') {
-      return true
-    } else if (result.state === 'prompt') {
-      return true
-    } else {
-      showToast('位置权限已被拒绝，请在浏览器设置中开启')
-      return false
-    }
-  } catch {
-    return true
-  }
-}
-
-const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
-  return new Promise<void>(async (resolve) => {
-    const hasPermission = await checkLocationPermission()
-    if (!hasPermission) {
-      resolve()
-      return
-    }
-
-    const showPosition = (lng: number, lat: number, accuracy: number, source: string) => {
-      console.log(`=== 定位结果 (${source}) ===`)
-      console.log('坐标:', { lng, lat })
-      console.log('精度:', accuracy, '米')
-      
-      map.value.setCenter([lng, lat])
-      
-      if (accuracy > 0 && accuracy <= 10) {
-        map.value.setZoom(19)
-      } else if (accuracy > 10 && accuracy <= 100) {
-        map.value.setZoom(17)
-      } else if (accuracy > 100 && accuracy <= 500) {
-        map.value.setZoom(15)
-      } else {
-        map.value.setZoom(13)
-      }
-      
-      if (showMarker) {
-        const marker = new AMap.Marker({
-          position: [lng, lat],
-          title: `我的位置 (精度: ${accuracy > 0 ? accuracy + 'm' : '未知'})`,
-          icon: new AMap.Icon({
-            size: new AMap.Size(32, 32),
-            image: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%236366f1"%3E%3Cpath d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/%3E%3C/svg%3E',
-          }),
-        })
-        map.value.add(marker)
-      }
-      
-      if (accuracy > 0 && accuracy <= 1000) {
-        const circle = new AMap.Circle({
-          center: [lng, lat],
-          radius: accuracy,
-          strokeColor: '#6366f1',
-          strokeOpacity: 0.8,
-          strokeWeight: 2,
-          fillColor: '#6366f1',
-          fillOpacity: 0.1
-        })
-        map.value.add(circle)
-      }
-      
-      if (accuracy > 0 && accuracy <= 100) {
-        showToast(`定位成功，精度: ${accuracy}米`)
-      } else if (accuracy > 100 && accuracy <= 1000) {
-        showToast(`定位成功，精度: ${accuracy}米（建议开启GPS提高精度）`)
-      } else if (accuracy > 1000) {
-        showToast(`定位精度较低: ${accuracy}米，请检查定位服务`)
-      }
-    }
-
-    const tryBrowserLocation = () => {
-      return new Promise<{lng: number, lat: number, accuracy: number} | null>((resolve) => {
-        if (!navigator.geolocation) {
-          resolve(null)
-          return
-        }
-        
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { longitude: lng, latitude: lat, accuracy } = position.coords
-            resolve({ lng, lat, accuracy })
-          },
-          () => {
-            resolve(null)
-          },
-          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-        )
-      })
-    }
-
-    const geolocation = new AMap.Geolocation({
-      enableHighAccuracy: true,
-      timeout: 5000,
-      maximumAge: 0,
-      noConvert: true,
-      showButton: true,
-      buttonPosition: 'RB',
-      showMarker: true,
-      showCircle: true,
-      panToLocation: true,
-      zoomToAccuracy: true,
-      useNative: true
-    })
-
-    geolocation.getCurrentPosition(async (status: string, result: any) => {
-      if (status === 'complete') {
-        const { lng, lat } = result.position
-        const accuracy = result.accuracy || 0
-        const locationType = result.locationType || 'unknown'
-        
-        console.log('定位类型:', locationType)
-        
-        const isIPLocation = locationType === 'ip' || locationType === 'IP'
-        
-        if (isIPLocation) {
-          console.log('检测到IP定位，精度较低')
-          console.log('尝试浏览器原生定位...')
-          
-          const browserLoc = await tryBrowserLocation()
-          if (browserLoc && browserLoc.accuracy <= 500) {
-            showPosition(browserLoc.lng, browserLoc.lat, browserLoc.accuracy, '浏览器原生')
-          } else {
-            console.log('浏览器定位也失败，尝试IP城市定位...')
-            tryIPCityLocation()
-          }
-          resolve()
-          return
-        }
-        
-        if (accuracy <= 500) {
-          showPosition(lng, lat, accuracy, '高德地图')
-        } else {
-          console.log(`高德定位精度不足(${accuracy}m)，尝试浏览器原生定位...`)
-          const browserLoc = await tryBrowserLocation()
-          
-          if (browserLoc && browserLoc.accuracy < accuracy) {
-            showPosition(browserLoc.lng, browserLoc.lat, browserLoc.accuracy, '浏览器原生')
-          } else {
-            showToast(`定位精度较低(${accuracy}米)，建议开启GPS以获得更准确的位置`)
-          }
-        }
-        resolve()
-      } else {
-        console.error('高德定位失败:', result.message || result)
-        console.log('尝试浏览器原生定位...')
-        
-        const browserLoc = await tryBrowserLocation()
-        if (browserLoc && browserLoc.accuracy <= 500) {
-          showPosition(browserLoc.lng, browserLoc.lat, browserLoc.accuracy, '浏览器原生')
-        } else {
-          console.log('浏览器定位也失败，尝试IP城市定位...')
-          tryIPCityLocation()
-        }
-        resolve()
-      }
-    })
-
-    const tryIPCityLocation = () => {
-      const citySearch = new AMap.CitySearch()
-      citySearch.getLocalCity((status: string, result: any) => {
-        if (status === 'complete' && result && result.city) {
-          const cityCenter = result.rectangle.split(';')[0].split(',')
-          const cityLng = parseFloat(cityCenter[0])
-          const cityLat = parseFloat(cityCenter[1])
-          
-          if (!isNaN(cityLng) && !isNaN(cityLat)) {
-            showPosition(cityLng, cityLat, 5000, 'IP城市定位')
-            showToast(`已定位到${result.city}，精度约5公里。建议开启GPS以获得更准确的位置`)
-          }
-        } else {
-          showToast('获取位置失败，请确保已授权位置权限并开启GPS。如需精确定位，请在手机设置中开启定位服务')
-        }
-      })
-    }
-  })
-}
-
-
-
-const handleLocate = async () => {
-  const AMap = (window as Window).AMap
-  if (!AMap) {
-    showToast('地图加载中，请稍候')
-    return
-  }
-  await getCurrentLocation(AMap, true)
 }
 
 const loadMarkersFromDB = async (AMap: any) => {
@@ -322,24 +155,22 @@ const loadMarkersFromDB = async (AMap: any) => {
         extData: markerData
       })
 
-      // 添加名字标签
       const text = new AMap.Text({
         position: new AMap.LngLat(lng, lat),
-        text: markerData.name,
-        offset: new AMap.Pixel(0, -35),
-        fontSize: '12px',
-        fontWeight: 'bold',
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        borderColor: '#6366f1',
-        borderWidth: 1,
-        borderRadius: 4,
-        padding: '4px 8px'
+        content: `<div style="font-size: 12px; font-weight: bold; background-color: rgba(255, 255, 255, 0.9); border: 1px solid #6366f1; border-radius: 4px; padding: 4px 6px; white-space: nowrap;">${markerData.name}</div>`,
+        offset: new AMap.Pixel(20, -20),
+        fontSize: '12px'
       })
 
       marker.on('click', () => {
-        showMarkerDetail.value = markerData
-        updateNodePath(markerData.name)
-        showDetailModal.value = true
+        if (lineLayer && lineLayer.length > 0) {
+          selectedMarkerForRelation.value = markerData.name
+          drawRelationLines(relationGenerations.value, markerData.name)
+        } else {
+          showMarkerDetail.value = markerData
+          updateNodePath(markerData.name)
+          showDetailModal.value = true
+        }
       })
 
       map.value.add(marker)
@@ -354,26 +185,6 @@ const loadMarkersFromDB = async (AMap: any) => {
 
 const toggleMarkerMode = () => {
   isMarkerMode.value = !isMarkerMode.value
-}
-
-const toggleSatelliteMode = () => {
-  const AMap = (window as Window).AMap
-  if (!AMap || !map.value) return
-
-  isSatelliteMode.value = !isSatelliteMode.value
-
-  if (isSatelliteMode.value) {
-    if (!satelliteLayer) {
-      satelliteLayer = new AMap.TileLayer.Satellite({
-        zooms: [1, 18],
-      })
-    }
-    map.value.add(satelliteLayer)
-  } else {
-    if (satelliteLayer) {
-      map.value.remove(satelliteLayer)
-    }
-  }
 }
 
 const handleSearch = async () => {
@@ -490,24 +301,22 @@ const submitMarker = async () => {
         extData: markerData
       })
 
-      // 添加名字标签
       const text = new AMap.Text({
         position: new AMap.LngLat(currentMarkerPosition.value[0], currentMarkerPosition.value[1]),
-        text: markerForm.value.name.trim(),
-        offset: new AMap.Pixel(0, -35),
-        fontSize: '12px',
-        fontWeight: 'bold',
-        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-        borderColor: '#6366f1',
-        borderWidth: 1,
-        borderRadius: 4,
-        padding: '4px 8px'
+        content: `<div style="font-size: 12px; font-weight: bold; background-color: rgba(255, 255, 255, 0.9); border: 1px solid #6366f1; border-radius: 4px; padding: 4px 6px; white-space: nowrap;">${markerForm.value.name.trim()}</div>`,
+        offset: new AMap.Pixel(20, -20),
+        fontSize: '12px'
       })
 
       marker.on('click', () => {
-        showMarkerDetail.value = markerData
-        updateNodePath(markerData.name)
-        showDetailModal.value = true
+        if (lineLayer && lineLayer.length > 0) {
+          selectedMarkerForRelation.value = markerData.name
+          drawRelationLines(relationGenerations.value, markerData.name)
+        } else {
+          showMarkerDetail.value = markerData
+          updateNodePath(markerData.name)
+          showDetailModal.value = true
+        }
       })
 
       map.value.add(marker)
@@ -792,6 +601,9 @@ const showRelationModal = ref(false)
 const markerRelations = ref<any[]>([])
 const relationLines = ref<any[]>([])
 let lineLayer: any = null
+const relationGenerations = ref(2)
+const selectedMarkerForRelation = ref<string>('')
+const allMarkersForSelect = ref<any[]>([])
 
 const updateNodePath = (name: string) => {
   markerNodePath.value = findNodePath(name)
@@ -869,7 +681,7 @@ const closeRelationModal = () => {
   showRelationModal.value = false
 }
 
-const drawRelationLines = async () => {
+const drawRelationLines = async (generations: number = relationGenerations.value, sourceMarkerName: string = '') => {
   const AMap = (window as Window).AMap
   if (!AMap || !map.value) return
   
@@ -881,43 +693,172 @@ const drawRelationLines = async () => {
     if (error || !markers || markers.length < 2) return
     
     const parentChildrenMap: Record<string, { parent: any; children: any[] }> = {}
+    const relatedMarkers = new Set<string>()
     
-    for (let i = 0; i < markers.length; i++) {
-      for (let j = i + 1; j < markers.length; j++) {
-        const marker1 = markers[i]
-        const marker2 = markers[j]
+    if (sourceMarkerName) {
+      const sourceMarker = markers.find((m: any) => m.name === sourceMarkerName)
+      if (!sourceMarker) {
+        showToast('未找到指定的标点')
+        return
+      }
+      
+      const sourcePath = findNodePath(sourceMarkerName)
+      if (!sourcePath || sourcePath.length === 0) {
+        showToast('该标点没有族谱信息')
+        return
+      }
+      
+      relatedMarkers.add(sourceMarkerName)
+      
+      for (const marker of markers) {
+        if (!marker.name || marker.name === sourceMarkerName) continue
         
-        if (!marker1.name || !marker2.name) continue
-        if (!marker1.lng || !marker1.lat || !marker2.lng || !marker2.lat) continue
-        
-        const path1 = findNodePath(marker1.name)
-        const path2 = findNodePath(marker2.name)
-        
-        if (!path1 || !path2 || path1.length === 0 || path2.length === 0) continue
+        const markerPath = findNodePath(marker.name)
+        if (!markerPath || markerPath.length === 0) continue
         
         let commonDepth = 0
-        const minLength = Math.min(path1.length, path2.length)
+        const minLength = Math.min(sourcePath.length, markerPath.length)
         
-        while (commonDepth < minLength && path1[commonDepth] === path2[commonDepth]) {
+        while (commonDepth < minLength && sourcePath[commonDepth] === markerPath[commonDepth]) {
           commonDepth++
         }
         
         if (commonDepth > 0) {
-          const isMarker1DirectParent = commonDepth === path1.length && path2.length === path1.length + 1
-          const isMarker2DirectParent = commonDepth === path2.length && path1.length === path2.length + 1
+          const generationDiff = Math.abs(sourcePath.length - markerPath.length)
+          const totalGenerations = Math.max(sourcePath.length, markerPath.length) - commonDepth + 1
           
-          if (isMarker1DirectParent) {
-            const parentKey = `${marker1.lng},${marker1.lat}`
-            if (!parentChildrenMap[parentKey]) {
-              parentChildrenMap[parentKey] = { parent: marker1, children: [] }
+          if (totalGenerations <= generations) {
+            relatedMarkers.add(marker.name)
+            
+            const isSourceParent = commonDepth === sourcePath.length && markerPath.length === sourcePath.length + 1
+            const isMarkerParent = commonDepth === markerPath.length && sourcePath.length === markerPath.length + 1
+            
+            if (isSourceParent) {
+              const parentKey = `${sourceMarker.lng},${sourceMarker.lat}`
+              if (!parentChildrenMap[parentKey]) {
+                parentChildrenMap[parentKey] = { parent: sourceMarker, children: [] }
+              }
+              parentChildrenMap[parentKey].children.push(marker)
+            } else if (isMarkerParent) {
+              const parentKey = `${marker.lng},${marker.lat}`
+              if (!parentChildrenMap[parentKey]) {
+                parentChildrenMap[parentKey] = { parent: marker, children: [] }
+              }
+              parentChildrenMap[parentKey].children.push(sourceMarker)
+            } else {
+              for (let k = commonDepth; k < Math.max(sourcePath.length, markerPath.length) - 1; k++) {
+                if (k < sourcePath.length - 1) {
+                  const ancestorMarker = markers.find((m: any) => m.name === sourcePath[k])
+                  const nextMarker = markers.find((m: any) => m.name === sourcePath[k + 1])
+                  if (ancestorMarker && nextMarker) {
+                    const parentKey = `${ancestorMarker.lng},${ancestorMarker.lat}`
+                    if (!parentChildrenMap[parentKey]) {
+                      parentChildrenMap[parentKey] = { parent: ancestorMarker, children: [] }
+                    }
+                    if (!parentChildrenMap[parentKey].children.find((c: any) => c.name === nextMarker.name)) {
+                      parentChildrenMap[parentKey].children.push(nextMarker)
+                    }
+                  }
+                }
+                if (k < markerPath.length - 1) {
+                  const ancestorMarker = markers.find((m: any) => m.name === markerPath[k])
+                  const nextMarker = markers.find((m: any) => m.name === markerPath[k + 1])
+                  if (ancestorMarker && nextMarker) {
+                    const parentKey = `${ancestorMarker.lng},${ancestorMarker.lat}`
+                    if (!parentChildrenMap[parentKey]) {
+                      parentChildrenMap[parentKey] = { parent: ancestorMarker, children: [] }
+                    }
+                    if (!parentChildrenMap[parentKey].children.find((c: any) => c.name === nextMarker.name)) {
+                      parentChildrenMap[parentKey].children.push(nextMarker)
+                    }
+                  }
+                }
+              }
             }
-            parentChildrenMap[parentKey].children.push(marker2)
-          } else if (isMarker2DirectParent) {
-            const parentKey = `${marker2.lng},${marker2.lat}`
-            if (!parentChildrenMap[parentKey]) {
-              parentChildrenMap[parentKey] = { parent: marker2, children: [] }
+          }
+        }
+      }
+    } else {
+      for (let i = 0; i < markers.length; i++) {
+        for (let j = i + 1; j < markers.length; j++) {
+          const marker1 = markers[i]
+          const marker2 = markers[j]
+          
+          if (!marker1.name || !marker2.name) continue
+          if (!marker1.lng || !marker1.lat || !marker2.lng || !marker2.lat) continue
+          
+          const path1 = findNodePath(marker1.name)
+          const path2 = findNodePath(marker2.name)
+          
+          if (!path1 || !path2 || path1.length === 0 || path2.length === 0) continue
+          
+          let commonDepth = 0
+          const minLength = Math.min(path1.length, path2.length)
+          
+          while (commonDepth < minLength && path1[commonDepth] === path2[commonDepth]) {
+            commonDepth++
+          }
+          
+          if (commonDepth > 0) {
+            const generationDiff = Math.abs(path1.length - path2.length)
+            const totalGenerations = Math.max(path1.length, path2.length) - commonDepth + 1
+            
+            if (totalGenerations <= generations) {
+              const isMarker1DirectParent = commonDepth === path1.length && path2.length === path1.length + 1
+              const isMarker2DirectParent = commonDepth === path2.length && path1.length === path2.length + 1
+              
+              if (isMarker1DirectParent) {
+                const parentKey = `${marker1.lng},${marker1.lat}`
+                if (!parentChildrenMap[parentKey]) {
+                  parentChildrenMap[parentKey] = { parent: marker1, children: [] }
+                }
+                parentChildrenMap[parentKey].children.push(marker2)
+              } else if (isMarker2DirectParent) {
+                const parentKey = `${marker2.lng},${marker2.lat}`
+                if (!parentChildrenMap[parentKey]) {
+                  parentChildrenMap[parentKey] = { parent: marker2, children: [] }
+                }
+                parentChildrenMap[parentKey].children.push(marker1)
+              } else if (generationDiff > 0 && generationDiff < generations) {
+                const ancestorPath = path1.slice(0, commonDepth)
+                const deeperMarker = path1.length > path2.length ? marker1 : marker2
+                const shallowerMarker = path1.length > path2.length ? marker2 : marker1
+                const deeperPath = path1.length > path2.length ? path1 : path2
+                const shallowerPath = path1.length > path2.length ? path2 : path1
+                
+                for (let k = commonDepth; k < deeperPath.length - 1; k++) {
+                  const ancestorMarker = markers.find((m: any) => m.name === deeperPath[k])
+                  if (ancestorMarker && k < deeperPath.length - 1) {
+                    const parentKey = `${ancestorMarker.lng},${ancestorMarker.lat}`
+                    const nextMarker = markers.find((m: any) => m.name === deeperPath[k + 1])
+                    if (nextMarker) {
+                      if (!parentChildrenMap[parentKey]) {
+                        parentChildrenMap[parentKey] = { parent: ancestorMarker, children: [] }
+                      }
+                      if (!parentChildrenMap[parentKey].children.find((c: any) => c.name === nextMarker.name)) {
+                        parentChildrenMap[parentKey].children.push(nextMarker)
+                      }
+                    }
+                  }
+                }
+                
+                if (shallowerMarker && deeperMarker) {
+                  const lastCommonAncestor = markers.find((m: any) => m.name === ancestorPath[ancestorPath.length - 1])
+                  if (lastCommonAncestor) {
+                    const deeperAncestor = markers.find((m: any) => m.name === deeperPath[commonDepth])
+                    if (deeperAncestor) {
+                      const parentKey = `${lastCommonAncestor.lng},${lastCommonAncestor.lat}`
+                      if (!parentChildrenMap[parentKey]) {
+                        parentChildrenMap[parentKey] = { parent: lastCommonAncestor, children: [] }
+                      }
+                      if (!parentChildrenMap[parentKey].children.find((c: any) => c.name === deeperAncestor.name)) {
+                        parentChildrenMap[parentKey].children.push(deeperAncestor)
+                      }
+                    }
+                  }
+                }
+              }
             }
-            parentChildrenMap[parentKey].children.push(marker1)
           }
         }
       }
@@ -1055,12 +996,31 @@ const clearRelationLines = () => {
   relationLines.value = []
 }
 
+const loadMarkersForSelect = async () => {
+  try {
+    const { data: markers, error } = await supabase.from('markers').select('*')
+    if (!error && markers) {
+      allMarkersForSelect.value = markers.filter((m: any) => m.name)
+    }
+  } catch (e) {
+    console.error('加载标点列表失败:', e)
+  }
+}
+
 const toggleRelationLines = async () => {
   if (lineLayer && lineLayer.length > 0) {
     clearRelationLines()
     showToast('已隐藏关系线')
   } else {
+    await loadMarkersForSelect()
     await drawRelationLines()
+  }
+}
+
+const clearSelectedMarker = async () => {
+  selectedMarkerForRelation.value = ''
+  if (lineLayer && lineLayer.length > 0) {
+    await drawRelationLines(relationGenerations.value, '')
   }
 }
 
@@ -1119,19 +1079,29 @@ onUnmounted(() => {
     </div>
 
     <div class="map-controls">
-      <button class="control-btn" @click="map && map.setZoom(map.getZoom() + 1)">+ 放大</button>
-      <button class="control-btn" @click="map && map.setZoom(map.getZoom() - 1)">- 缩小</button>
       <button class="control-btn" @click="map && map.setCenter([116.397428, 39.90923])">重置视角</button>
-      <button class="control-btn locate-btn" @click="handleLocate">定位</button>
       <button class="control-btn marker-btn" :class="{ active: isMarkerMode }" @click="toggleMarkerMode">
         {{ isMarkerMode ? '标点模式' : '标点' }}
       </button>
-      <button class="control-btn satellite-btn" :class="{ active: isSatelliteMode }" @click="toggleSatelliteMode">
-        {{ isSatelliteMode ? '✓ 卫星图' : '🛰️ 卫星图' }}
-      </button>
-      <button class="control-btn relation-btn" :class="{ active: lineLayer }" @click="toggleRelationLines">
-        {{ lineLayer ? '✓ 关系线' : '🔗 关系线' }}
-      </button>
+      <div class="relation-controls">
+        <div class="generation-input-wrapper">
+          <input 
+            type="number" 
+            v-model.number="relationGenerations" 
+            class="generation-input"
+            min="2"
+            @change="lineLayer && drawRelationLines()"
+          />
+          <span class="generation-label">代</span>
+        </div>
+        <button v-if="selectedMarkerForRelation" class="control-btn clear-marker-btn" @click="clearSelectedMarker">
+          清除选择 ({{ selectedMarkerForRelation }})
+        </button>
+        <button class="control-btn relation-btn" :class="{ active: lineLayer }" @click="toggleRelationLines">
+          {{ lineLayer ? '✓ 关系线' : '🔗 关系线' }}
+        </button>
+        <div v-if="lineLayer" class="relation-hint">点击地图标点选择</div>
+      </div>
     </div>
 
     <div v-if="showMarkerModal" class="modal-overlay" @click.self="closeMarkerModal">
@@ -1455,8 +1425,9 @@ onUnmounted(() => {
 
 .map-controls {
   position: absolute;
-  bottom: 24px;
+  top: 50%;
   right: 24px;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1464,6 +1435,114 @@ onUnmounted(() => {
   padding: 12px;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.relation-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.generation-select {
+  padding: 8px 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  background: white;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.generation-select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.generation-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.generation-input {
+  width: 60px;
+  padding: 8px 8px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
+  background: white;
+  text-align: center;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.generation-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.generation-input:hover {
+  border-color: #cbd5e1;
+}
+
+.generation-input::-webkit-outer-spin-button,
+.generation-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.generation-input[type=number] {
+  -moz-appearance: textfield;
+}
+
+.generation-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.marker-select {
+  padding: 8px 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  background: white;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.marker-select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.marker-select:hover:not(:disabled) {
+  border-color: #cbd5e1;
+}
+
+.clear-marker-btn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+}
+
+.clear-marker-btn:hover {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  color: white;
+}
+
+.relation-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+  padding-top: 4px;
 }
 
 .control-btn {
@@ -1483,16 +1562,6 @@ onUnmounted(() => {
   color: #1e293b;
 }
 
-.locate-btn {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
-}
-
-.locate-btn:hover {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  color: white;
-}
-
 .marker-btn {
   background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
   color: white;
@@ -1507,22 +1576,6 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   color: white;
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.5);
-}
-
-.satellite-btn {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-}
-
-.satellite-btn:hover {
-  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-  color: white;
-}
-
-.satellite-btn.active {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.5);
 }
 
 .modal-overlay {
