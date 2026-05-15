@@ -195,7 +195,7 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
 
     const geolocation = new AMap.Geolocation({
       enableHighAccuracy: true,
-      timeout: 10000,
+      timeout: 15000,
       maximumAge: 0,
       convert: true,
       showButton: false,
@@ -210,10 +210,28 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
       if (status === 'complete') {
         const { lng, lat } = result.position
         const accuracy = result.accuracy || 0
+        const locationType = result.locationType || 'unknown'
+        
+        console.log('定位类型:', locationType)
+        
+        const isIPLocation = locationType === 'ip' || locationType === 'IP'
+        
+        if (isIPLocation) {
+          console.log('检测到IP定位，拒绝使用')
+          console.log('尝试浏览器原生定位...')
+          
+          const browserLoc = await tryBrowserLocation()
+          if (browserLoc && browserLoc.accuracy <= 500) {
+            showPosition(browserLoc.lng, browserLoc.lat, browserLoc.accuracy, '浏览器原生')
+          } else {
+            showToast('当前为IP定位，精度较低。请开启GPS以获得更准确的位置')
+          }
+          resolve()
+          return
+        }
         
         if (accuracy <= 500) {
           showPosition(lng, lat, accuracy, '高德地图')
-          resolve()
         } else {
           console.log(`高德定位精度不足(${accuracy}m)，尝试浏览器原生定位...`)
           const browserLoc = await tryBrowserLocation()
@@ -221,16 +239,16 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
           if (browserLoc && browserLoc.accuracy < accuracy) {
             showPosition(browserLoc.lng, browserLoc.lat, browserLoc.accuracy, '浏览器原生')
           } else {
-            showPosition(lng, lat, accuracy, '高德地图(降级)')
+            showToast(`定位精度较低(${accuracy}米)，请开启GPS`)
           }
-          resolve()
         }
+        resolve()
       } else {
         console.error('高德定位失败:', result.message || result)
         console.log('尝试浏览器原生定位...')
         
         const browserLoc = await tryBrowserLocation()
-        if (browserLoc) {
+        if (browserLoc && browserLoc.accuracy <= 500) {
           showPosition(browserLoc.lng, browserLoc.lat, browserLoc.accuracy, '浏览器原生')
         } else {
           showToast('获取位置失败，请确保已授权位置权限并开启GPS')
