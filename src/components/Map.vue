@@ -935,40 +935,10 @@ const drawRelationLines = async () => {
     
     lineLayer = []
     const arrowMarkers: any[] = []
-    const textLabels: any[] = []
-    const displayedNames = new Set<string>()
-    
-    const createTextLabel = (marker: any) => {
-      if (displayedNames.has(marker.name)) return
-      displayedNames.add(marker.name)
-      
-      const text = new AMap.Text({
-        text: marker.name,
-        position: new AMap.LngLat(marker.lng, marker.lat),
-        offset: new AMap.Pixel(0, -35),
-        style: {
-          fontSize: '14px',
-          fontWeight: 'bold',
-          color: '#6366f1',
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          padding: '4px 8px',
-          borderRadius: '4px',
-          border: '1px solid #6366f1',
-          whiteSpace: 'nowrap'
-        },
-        zIndex: 101
-      })
-      
-      map.value.add(text)
-      textLabels.push(text)
-    }
     
     Object.values(parentChildrenMap).forEach((group: any) => {
       const parent = group.parent
       const children = group.children
-      
-      createTextLabel(parent)
-      children.forEach(createTextLabel)
       
       if (children.length === 1) {
         const child = children[0]
@@ -1027,9 +997,6 @@ const drawRelationLines = async () => {
     
     if (arrowMarkers.length > 0) {
       lineLayer.push(...arrowMarkers)
-    }
-    if (textLabels.length > 0) {
-      lineLayer.push(...textLabels)
     }
     
     showToast(`已在地图上绘制关系线`)
