@@ -71,8 +71,10 @@ const initMap = async () => {
     map.value = new AMap.Map(mapContainer.value, {
       zoom: 15,
       center: [116.397428, 39.90923],
-      viewMode: '2D',
+      viewMode: '3D',
       features: ['bg', 'road', 'building', 'land', 'point', 'label'],
+      renderer: 'webgl',
+      mapStyle: 'amap://styles/normal',
     })
 
     await getCurrentLocation(AMap, true)
@@ -120,17 +122,21 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
       return
     }
 
-    const handleLocationSuccess = (lng: number, lat: number, accuracy: number) => {
+    const showPosition = (lng: number, lat: number, accuracy: number, source: string) => {
+      console.log(`=== 定位结果 (${source}) ===`)
+      console.log('坐标:', { lng, lat })
+      console.log('精度:', accuracy, '米')
+      
       map.value.setCenter([lng, lat])
       
-      if (accuracy > 0 && accuracy <= 1) {
-        map.value.setZoom(20)
-      } else if (accuracy > 1 && accuracy <= 10) {
-        map.value.setZoom(18)
+      if (accuracy > 0 && accuracy <= 10) {
+        map.value.setZoom(19)
       } else if (accuracy > 10 && accuracy <= 100) {
-        map.value.setZoom(16)
-      } else {
+        map.value.setZoom(17)
+      } else if (accuracy > 100 && accuracy <= 500) {
         map.value.setZoom(15)
+      } else {
+        map.value.setZoom(13)
       }
       
       if (showMarker) {
@@ -158,23 +164,33 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
         map.value.add(circle)
       }
       
-      if (accuracy > 0 && accuracy <= 1) {
+      if (accuracy > 0 && accuracy <= 100) {
         showToast(`定位成功，精度: ${accuracy}米`)
-      } else if (accuracy > 1 && accuracy <= 10) {
-        showToast(`定位成功，精度: ${accuracy}米`)
-      } else if (accuracy > 10 && accuracy <= 100) {
-        showToast(`定位成功，精度: ${accuracy}米`)
+      } else if (accuracy > 100 && accuracy <= 1000) {
+        showToast(`定位成功，精度: ${accuracy}米（建议开启GPS提高精度）`)
+      } else if (accuracy > 1000) {
+        showToast(`定位精度较低: ${accuracy}米，请检查定位服务`)
       }
     }
 
-    const handleLocationError = (errorMsg: string, fallback: boolean = true) => {
-      console.log('定位失败:', errorMsg)
-      if (fallback) {
-        getLocationWithBrowserAPI(AMap, showMarker, resolve)
-      } else {
-        showToast('获取位置失败，请确保已授权位置权限并开启GPS')
-        resolve()
-      }
+    const tryBrowserLocation = () => {
+      return new Promise<{lng: number, lat: number, accuracy: number} | null>((resolve) => {
+        if (!navigator.geolocation) {
+          resolve(null)
+          return
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { longitude: lng, latitude: lat, accuracy } = position.coords
+            resolve({ lng, lat, accuracy })
+          },
+          () => {
+            resolve(null)
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        )
+      })
     }
 
     const geolocation = new AMap.Geolocation({
@@ -185,100 +201,47 @@ const getCurrentLocation = async (AMap: any, showMarker: boolean = false) => {
       showButton: false,
       showMarker: false,
       showCircle: true,
-      panToLocation: false,
-      zoomToAccuracy: false
+      panToLocation: true,
+      zoomToAccuracy: true,
+      useNative: false
     })
 
-    geolocation.getCurrentPosition((status: string, result: any) => {
+    geolocation.getCurrentPosition(async (status: string, result: any) => {
       if (status === 'complete') {
         const { lng, lat } = result.position
         const accuracy = result.accuracy || 0
         
-        if (accuracy > 0 && accuracy <= 100) {
-          handleLocationSuccess(lng, lat, accuracy)
+        if (accuracy <= 500) {
+          showPosition(lng, lat, accuracy, '高德地图')
           resolve()
         } else {
-          handleLocationError(`高德定位精度不足: ${accuracy}m`, true)
+          console.log(`高德定位精度不足(${accuracy}m)，尝试浏览器原生定位...`)
+          const browserLoc = await tryBrowserLocation()
+          
+          if (browserLoc && browserLoc.accuracy < accuracy) {
+            showPosition(browserLoc.lng, browserLoc.lat, browserLoc.accuracy, '浏览器原生')
+          } else {
+            showPosition(lng, lat, accuracy, '高德地图(降级)')
+          }
+          resolve()
         }
       } else {
-        handleLocationError(`高德定位失败: ${result.message || result}`, true)
+        console.error('高德定位失败:', result.message || result)
+        console.log('尝试浏览器原生定位...')
+        
+        const browserLoc = await tryBrowserLocation()
+        if (browserLoc) {
+          showPosition(browserLoc.lng, browserLoc.lat, browserLoc.accuracy, '浏览器原生')
+        } else {
+          showToast('获取位置失败，请确保已授权位置权限并开启GPS')
+        }
+        resolve()
       }
     })
   })
 }
 
-const getLocationWithBrowserAPI = (AMap: any, showMarker: boolean, resolve: () => void) => {
-  if (!navigator.geolocation) {
-    showToast('您的浏览器不支持地理定位')
-    resolve()
-    return
-  }
 
-  const options: PositionOptions = {
-    enableHighAccuracy: true,
-    timeout: 15000,
-    maximumAge: 0
-  }
-
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      const { longitude: lng, latitude: lat, accuracy } = position.coords
-      console.log('浏览器原生定位成功:', { lng, lat, accuracy })
-      handleLocationSuccess(lng, lat, accuracy)
-      resolve()
-    },
-    (error) => {
-      const errorMessages: Record<number, string> = {
-        1: '用户拒绝了位置权限',
-        2: '获取位置失败',
-        3: '定位超时'
-      }
-      console.log('浏览器原生定位失败:', errorMessages[error.code] || error.message)
-      showToast(errorMessages[error.code] || '获取位置失败，请检查定位服务')
-      resolve()
-    },
-    options
-  )
-}
-
-const handleLocationSuccess = (lng: number, lat: number, accuracy: number) => {
-  if (!map.value) return
-  
-  map.value.setCenter([lng, lat])
-  
-  if (accuracy > 0 && accuracy <= 1) {
-    map.value.setZoom(20)
-  } else if (accuracy > 1 && accuracy <= 10) {
-    map.value.setZoom(18)
-  } else if (accuracy > 10 && accuracy <= 100) {
-    map.value.setZoom(16)
-  } else {
-    map.value.setZoom(15)
-  }
-  
-  const marker = new AMap.Marker({
-    position: [lng, lat],
-    title: `我的位置 (精度: ${accuracy > 0 ? accuracy + 'm' : '未知'})`,
-    icon: new AMap.Icon({
-      size: new AMap.Size(32, 32),
-      image: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%236366f1"%3E%3Cpath d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/%3E%3C/svg%3E',
-    }),
-  })
-  map.value.add(marker)
-  
-  if (accuracy > 0 && accuracy <= 1000) {
-    const circle = new AMap.Circle({
-      center: [lng, lat],
-      radius: accuracy,
-      strokeColor: '#6366f1',
-      strokeOpacity: 0.8,
-      strokeWeight: 2,
-      fillColor: '#6366f1',
-      fillOpacity: 0.1
-    })
-    map.value.add(circle)
-  }
-}
 
 const handleLocate = async () => {
   const AMap = (window as Window).AMap
@@ -361,14 +324,15 @@ const toggleSatelliteMode = () => {
   isSatelliteMode.value = !isSatelliteMode.value
 
   if (isSatelliteMode.value) {
-    satelliteLayer = new AMap.TileLayer.Satellite({
-      zooms: [1, 16.5],
-    })
+    if (!satelliteLayer) {
+      satelliteLayer = new AMap.TileLayer.Satellite({
+        zooms: [1, 18],
+      })
+    }
     map.value.add(satelliteLayer)
   } else {
     if (satelliteLayer) {
-      satelliteLayer.setMap(null)
-      satelliteLayer = null
+      map.value.remove(satelliteLayer)
     }
   }
 }
